@@ -10,30 +10,66 @@ export function renderScatter(container, def, state, reportId, api) {
   if (!def.tables.length) return { update() {} };
 
   // 列選択の候補: 各テーブルの入力列 + 導出列
+  // (定義ファイルはどの列を散布図にするか指定しない。ここで実データの全列から
+  //  ユーザーがオプションボタンで自由に X/Y を選ぶ)
+  const multiTable = def.tables.length > 1;
   const options = [];
   for (const t of def.tables) {
-    for (const c of t.columns) options.push({ table: t.name, col: c.name, label: `${t.label}: ${c.label}`, unit: c.unit });
-    for (const c of t.derived_columns) options.push({ table: t.name, col: c.name, label: `${t.label}: ${c.label || c.name}`, unit: c.unit });
+    const push = (c, label) => options.push({
+      table: t.name, col: c.name, unit: c.unit,
+      label: `${t.label}: ${label}`,                 // 軸ラベル・凡例用
+      chip: multiTable ? `${t.label}·${label}` : label,  // ボタン表示用(短め)
+    });
+    for (const c of t.columns) push(c, c.label);
+    for (const c of t.derived_columns) push(c, c.label || c.name);
   }
 
-  const xSel = buildSelect(options, 0);
-  const ySel = buildSelect(options, Math.min(1, options.length - 1));
+  // オプションボタン(トグル chip)で X/Y を選ぶ。ドロップダウンより一覧性が高く
+  // タッチ操作にも向く。選択肢は実データの列そのものなので設定ファイルに縛られない。
+  let xIndex = 0;
+  let yIndex = Math.min(1, options.length - 1);
   const fitChk = el("input", { type: "checkbox", id: "fit-chk", checked: "checked" });
   const fitInfo = el("span", { class: "fit-info" });
 
+  const xRow = el("div", { class: "axis-chips", role: "group", "aria-label": "X軸の列" });
+  const yRow = el("div", { class: "axis-chips", role: "group", "aria-label": "Y軸の列" });
+
+  function buildChips() {
+    for (const [row, axis] of [[xRow, "x"], [yRow, "y"]]) {
+      row.innerHTML = "";
+      options.forEach((o, i) => {
+        const selected = (axis === "x" ? xIndex : yIndex) === i;
+        const other = axis === "x" ? yIndex : xIndex;
+        const chip = el("button", {
+          type: "button",
+          class: "chip" + (selected ? " active" : "") + (i === other ? " chip-other" : ""),
+          "aria-pressed": selected ? "true" : "false",
+          title: o.label + (o.unit ? ` [${o.unit}]` : ""),
+          onclick: () => {
+            if (axis === "x") xIndex = i; else yIndex = i;
+            buildChips();
+            update(lastResult);
+          },
+        }, o.chip, o.unit ? el("span", { class: "chip-unit" }, o.unit) : "");
+        row.append(chip);
+      });
+    }
+  }
+
   const controls = el("div", { class: "scatter-controls" },
-    el("label", {}, "X軸 ", xSel),
-    el("label", {}, "Y軸 ", ySel),
-    el("label", {}, fitChk, " フィット直線を重ねる"),
-    fitInfo,
+    el("div", { class: "axis-line" }, el("span", { class: "axis-label" }, "X軸"), xRow),
+    el("div", { class: "axis-line" }, el("span", { class: "axis-label" }, "Y軸"), yRow),
+    el("div", { class: "axis-line" },
+      el("label", { class: "fit-toggle" }, fitChk, " フィット直線を重ねる"), fitInfo),
   );
+  buildChips();
   const svgHost = el("div", { class: "table-wrap" });
   container.append(controls, svgHost);
 
   let lastResult = null;
 
   function currentCols() {
-    return { x: options[xSel.selectedIndex], y: options[ySel.selectedIndex] };
+    return { x: options[xIndex], y: options[yIndex] };
   }
 
   function columnValues(result, opt) {
@@ -141,18 +177,10 @@ export function renderScatter(container, def, state, reportId, api) {
     svgHost.append(svg);
   }
 
-  xSel.addEventListener("change", () => update(lastResult));
-  ySel.addEventListener("change", () => update(lastResult));
+  // X/Y の選択は各 chip の onclick で処理する(buildChips 内)。
   fitChk.addEventListener("change", () => update(lastResult));
 
   return { update };
-}
-
-function buildSelect(options, selectedIndex) {
-  const sel = el("select", {});
-  options.forEach((o, i) => sel.append(el("option", { value: i }, o.label)));
-  sel.selectedIndex = selectedIndex;
-  return sel;
 }
 
 function axisLabel(opt) {
