@@ -1,0 +1,240 @@
+:root {
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --text: #1f2430;
+  --muted: #6b7280;
+  --border: #d9dde3;
+  --accent: #2563eb;
+  --accent-soft: #eff4ff;
+  --danger: #dc2626;
+  --ok: #059669;
+  --derived-bg: #f3f4f6;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", Meiryo, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand { font-weight: 700; text-decoration: none; color: var(--text); font-size: 17px; }
+.topbar-status { margin-left: auto; color: var(--muted); font-size: 13px; }
+
+.container { max-width: 1080px; margin: 0 auto; padding: 20px; }
+
+h1 { font-size: 22px; margin: 8px 0 4px; }
+h2 { font-size: 17px; margin: 26px 0 10px; border-left: 4px solid var(--accent); padding-left: 9px; }
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; }
+code, .mono { font-family: var(--mono); font-size: 0.92em; }
+
+/* ---- buttons ---- */
+button {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  border-radius: 7px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+button:hover { background: #f3f4f6; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { filter: brightness(1.08); }
+button.danger { color: var(--danger); border-color: #f3caca; }
+button.danger:hover { background: #fef2f2; }
+button.small-btn { padding: 3px 10px; font-size: 13px; }
+button:disabled { opacity: .45; cursor: default; }
+
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 0; }
+.spacer { flex: 1; }
+
+.badge {
+  display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 10px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.badge.gray { background: #eef0f3; color: var(--muted); }
+.dirty-dot { color: #d97706; font-weight: 700; }
+
+/* ---- home cards ---- */
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.report-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; display: flex; flex-direction: column; gap: 6px;
+}
+.report-card .title { font-weight: 600; font-size: 16px; }
+.report-card .actions { display: flex; gap: 8px; margin-top: 10px; }
+
+/* ---- panels ---- */
+.panel {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px 18px; margin-bottom: 16px;
+}
+
+/* ---- scalar inputs ---- */
+.input-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.field label { display: block; font-weight: 600; font-size: 13.5px; }
+.field .desc { font-size: 12px; color: var(--muted); }
+.field .input-row { display: flex; align-items: baseline; gap: 6px; }
+.field input {
+  font: inherit; font-family: var(--mono); width: 100%;
+  padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px;
+}
+.field .unit { color: var(--muted); white-space: nowrap; }
+input.invalid { border-color: var(--danger); background: #fef2f2; }
+input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+/* ---- tables ---- */
+.table-wrap { overflow-x: auto; }
+table.data { border-collapse: collapse; width: 100%; }
+table.data th, table.data td { border: 1px solid var(--border); padding: 4px 8px; text-align: center; }
+table.data th { background: #f8f9fb; font-weight: 600; font-size: 13px; }
+table.data th .unit { display: block; font-weight: 400; color: var(--muted); font-size: 11.5px; }
+table.data td.rownum { color: var(--muted); font-size: 12px; width: 34px; background: #fafbfc; }
+table.data td input {
+  font-family: var(--mono); font-size: 14px; width: 110px; border: none;
+  padding: 4px 6px; text-align: right; background: transparent;
+}
+table.data td.derived { background: var(--derived-bg); font-family: var(--mono); font-size: 13.5px; }
+table.data td.rowdel { width: 30px; }
+table.data td.rowdel button { border: none; color: var(--muted); padding: 0 6px; background: none; }
+table.data td.rowdel button:hover { color: var(--danger); }
+
+/* ---- derived results ---- */
+.derived-list { display: flex; flex-direction: column; gap: 10px; }
+.derived-item {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px;
+  border-bottom: 1px dashed var(--border); padding-bottom: 8px;
+}
+.derived-item:last-child { border-bottom: none; }
+.derived-item .dname { font-family: var(--mono); font-weight: 600; min-width: 110px; }
+.derived-item .dvalue { font-family: var(--mono); font-size: 19px; font-weight: 700; }
+.derived-item .dunit { color: var(--muted); }
+.derived-item .dfull { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.derived-item .dexpr { color: var(--muted); font-size: 12.5px; }
+.derived-item .derror { color: var(--danger); font-size: 13px; width: 100%; }
+.derived-item.error .dvalue { color: var(--danger); }
+
+/* ---- scatter ---- */
+.scatter-controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.scatter-controls select { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; }
+.scatter-svg { width: 100%; max-width: 720px; height: auto; background: #fff; }
+.fit-info { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+
+/* ---- editor ---- */
+textarea.yaml-editor {
+  width: 100%; min-height: 420px; font-family: var(--mono); font-size: 13.5px;
+  border: 1px solid var(--border); border-radius: 8px; padding: 12px; line-height: 1.5;
+  resize: vertical;
+}
+.validate-result { border-radius: 8px; padding: 10px 14px; margin-top: 10px; white-space: pre-wrap; }
+.validate-result.ok { background: #ecfdf5; color: var(--ok); }
+.validate-result.ng { background: #fef2f2; color: var(--danger); }
+
+/* ---- modal ---- */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, .45);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.modal {
+  background: #fff; border-radius: 12px; padding: 22px; width: min(620px, 92vw);
+  max-height: 88vh; overflow-y: auto;
+}
+.modal h2 { margin-top: 0; border: none; padding: 0; }
+.modal .row { margin-bottom: 12px; }
+.modal input[type=text], .modal select, .modal textarea {
+  font: inherit; width: 100%; padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 7px;
+}
+.modal textarea { font-family: var(--mono); font-size: 13px; min-height: 180px; }
+.modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+.form-error { color: var(--danger); font-size: 13.5px; white-space: pre-wrap; }
+
+pre.export-box {
+  background: #f8f9fb; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; overflow: auto; max-height: 50vh; font-size: 12.5px;
+}
+
+/* =====================================================================
+   スマホ / 狭幅対応
+   ===================================================================== */
+@media (max-width: 640px) {
+  body { font-size: 15px; }
+  .container { padding: 12px; }
+  .topbar { padding: 9px 12px; }
+  h1 { font-size: 19px; }
+
+  /* ツールバーは折り返し、ボタンは押しやすく */
+  .toolbar { gap: 8px; }
+  .toolbar h1 { width: 100%; }
+  button { padding: 9px 14px; }
+  button.small-btn { padding: 7px 12px; font-size: 14px; }
+
+  /* 入力欄は 1 列に */
+  .input-grid { grid-template-columns: 1fr; }
+  .card-grid { grid-template-columns: 1fr; }
+
+  /* タッチしやすい入力サイズ(iOS の自動ズーム回避のため 16px) */
+  .field input { font-size: 16px; padding: 10px 12px; }
+
+  /* 表を「行=カード」に組み替える。各セルはラベル付きの行になる。 */
+  table.data, table.data tbody { display: block; width: 100%; }
+  table.data tr:first-child { display: none; } /* ヘッダ行は隠す */
+  table.data tr {
+    display: block; border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 12px; padding: 6px 10px; background: #fff;
+  }
+  table.data td {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; border: none; border-bottom: 1px dashed var(--border);
+    padding: 8px 2px; text-align: right;
+  }
+  table.data tr td:last-child { border-bottom: none; }
+  table.data td::before {
+    content: attr(data-label);
+    font-size: 13px; font-weight: 600; color: var(--muted);
+    text-align: left; flex: 0 0 auto; white-space: normal;
+  }
+  table.data td input {
+    width: auto; flex: 1 1 auto; min-width: 0; font-size: 16px;
+    text-align: right; border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px;
+  }
+  table.data td.derived { font-size: 15px; background: transparent; color: var(--text); }
+  table.data td.derived::before { color: var(--muted); }
+  table.data td.rownum {
+    width: auto; background: transparent; font-weight: 700; color: var(--text);
+    border-bottom: 2px solid var(--border);
+  }
+  table.data td.rowdel { justify-content: flex-end; }
+  table.data td.rowdel::before { content: ""; }
+  table.data td.rowdel button { font-size: 16px; padding: 6px 12px; }
+
+  /* 導出量: フル精度と式は折り返して下に */
+  .derived-item .dvalue { font-size: 20px; }
+  .derived-item .spacer { display: none; }
+  .derived-item .dfull, .derived-item .dexpr { width: 100%; }
+
+  .scatter-controls { flex-direction: column; align-items: stretch; }
+  .scatter-controls select { font-size: 16px; padding: 9px; }
+
+  textarea.yaml-editor { font-size: 14px; min-height: 340px; }
+  .modal { padding: 16px; width: 96vw; }
+}

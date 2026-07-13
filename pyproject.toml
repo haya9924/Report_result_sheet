@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resultsheet"
+version = "0.1.0"
+description = "実験レポートの結果入力システム — テンプレート駆動のWeb GUI + AI向けCLI"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "pyyaml>=6.0",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[project.scripts]
+resultsheet = "resultsheet.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["resultsheet*"]
+
+[tool.setuptools.package-data]
+resultsheet = ["web/**/*", "templates/**/*"]

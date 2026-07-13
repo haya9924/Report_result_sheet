@@ -1,0 +1,26 @@
+# テンプレート: 密度測定(スカラー入力のみの最小例)
+meta:
+  id: density
+  title: 金属試料の密度測定
+  description: 質量と体積から密度を求め、鉄の文献値と比較する
+
+inputs:
+  - name: m
+    label: 質量
+    unit: g
+    description: 電子天秤の読み(0.001 g 精度)
+  - name: V
+    label: 体積
+    unit: cm^3
+    description: メスシリンダーによる水置換法
+
+derived:
+  - name: rho
+    label: 密度
+    expr: "m / V"
+    unit: g/cm^3
+    display: {sigfigs: 3}
+  - name: rho_ratio
+    label: 鉄の文献値 (7.874 g/cm^3) との比
+    expr: "rho / 7.874"
+    display: {decimals: 3}

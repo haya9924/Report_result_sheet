@@ -1,0 +1,52 @@
+# テンプレート: 自由落下による重力加速度の測定
+# 表形式データ + 行内導出列 + 集計 + 最小二乗フィットのフル機能例
+meta:
+  id: free_fall
+  title: 自由落下による重力加速度の測定
+  description: 落下距離 h と落下時間 t を繰り返し測定し、h = (g/2) t^2 の直線フィットから g を求める
+
+tables:
+  - name: drops
+    label: 落下測定
+    min_rows: 5
+    columns:
+      - {name: h, label: 落下距離, unit: m}
+      - {name: t, label: 落下時間, unit: s}
+    derived_columns:
+      - name: t2
+        label: 時間の二乗
+        expr: "t ** 2"
+        unit: s^2
+        display: {sigfigs: 4}
+
+derived:
+  - name: t_mean
+    label: 落下時間の平均
+    expr: "mean(drops.t)"
+    unit: s
+    display: {sigfigs: 4}
+  - name: t_std
+    label: 落下時間の標本標準偏差
+    expr: "std(drops.t)"
+    unit: s
+    display: {sigfigs: 2}
+  - name: a_slope
+    label: フィット直線の傾き (h = a·t² + b)
+    expr: "slope(drops.t2, drops.h)"
+    unit: m/s^2
+    display: {sigfigs: 4}
+  - name: b_intercept
+    label: フィット直線の切片
+    expr: "intercept(drops.t2, drops.h)"
+    unit: m
+    display: {sigfigs: 2}
+  - name: g_measured
+    label: 重力加速度の測定値 (g = 2a)
+    expr: "2 * a_slope"
+    unit: m/s^2
+    display: {sigfigs: 4}
+  - name: g_error_percent
+    label: 文献値 (9.80665 m/s^2) との相対誤差
+    expr: "abs(g_measured - 9.80665) / 9.80665 * 100"
+    unit: "%"
+    display: {decimals: 2}
