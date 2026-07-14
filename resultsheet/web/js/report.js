@@ -297,30 +297,45 @@ function reprFloat(v) {
   return String(v);
 }
 
+const EXPORT_FORMATS = [
+  { key: "json", label: "JSON", mime: "application/json", ext: "json" },
+  { key: "md", label: "Markdown", mime: "text/markdown", ext: "md" },
+  { key: "csv", label: "CSV", mime: "text/csv", ext: "csv" },
+];
+
 async function openExport(reportId) {
-  let jsonText = "", mdText = "";
+  const texts = {};
   try {
-    jsonText = JSON.stringify(await api.exportReport(reportId, "json"), null, 2);
-    mdText = await api.exportReport(reportId, "md");
+    texts.json = JSON.stringify(await api.exportReport(reportId, "json"), null, 2);
+    texts.md = await api.exportReport(reportId, "md");
+    texts.csv = await api.exportReport(reportId, "csv");
   } catch (e) {
     alert("エクスポート取得に失敗: " + e.message);
     return;
   }
   openModal((close) => {
     const box = el("div", {});
-    const pre = el("pre", { class: "export-box" }, jsonText);
-    const showJson = el("button", { class: "primary small-btn" }, "JSON");
-    const showMd = el("button", { class: "small-btn" }, "Markdown");
-    showJson.onclick = () => { pre.textContent = jsonText; showJson.classList.add("primary"); showMd.classList.remove("primary"); };
-    showMd.onclick = () => { pre.textContent = mdText; showMd.classList.add("primary"); showJson.classList.remove("primary"); };
+    const pre = el("pre", { class: "export-box" }, texts.json);
+    let current = EXPORT_FORMATS[0];
+    const buttons = EXPORT_FORMATS.map((f, idx) => {
+      const btn = el("button", { class: "small-btn" + (idx === 0 ? " primary" : "") }, f.label);
+      btn.onclick = () => {
+        current = f;
+        pre.textContent = texts[f.key];
+        buttons.forEach((b) => b.classList.remove("primary"));
+        btn.classList.add("primary");
+      };
+      return btn;
+    });
     box.append(
       el("h2", {}, "エクスポート"),
       el("p", { class: "muted small" },
-        "AIがLaTeX執筆時に参照する形式です。CLIでは resultsheet show / get でも取得できます。"),
-      el("div", { class: "toolbar" }, showJson, showMd,
+        "AIがLaTeX執筆時に参照する形式です。CLIでは resultsheet show / get でも取得できます。" +
+        "CSV は表計算ソフトや pandas でそのまま読み込める平坦化形式です。"),
+      el("div", { class: "toolbar" }, ...buttons,
         el("span", { class: "spacer" }),
         el("button", { class: "small-btn", onclick: () => navigator.clipboard?.writeText(pre.textContent) }, "コピー"),
-        el("button", { class: "small-btn", onclick: () => downloadText(reportId, pre.textContent) }, "ダウンロード"),
+        el("button", { class: "small-btn", onclick: () => downloadText(reportId, pre.textContent, current) }, "ダウンロード"),
       ),
       pre,
       el("div", { class: "modal-actions" }, el("button", { onclick: close }, "閉じる")),
@@ -329,12 +344,11 @@ async function openExport(reportId) {
   });
 }
 
-function downloadText(id, text) {
-  const isJson = text.trimStart().startsWith("{");
-  const blob = new Blob([text], { type: isJson ? "application/json" : "text/markdown" });
+function downloadText(id, text, format) {
+  const blob = new Blob([text], { type: format.mime });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `${id}.${isJson ? "json" : "md"}`;
+  a.download = `${id}.${format.ext}`;
   a.click();
   URL.revokeObjectURL(a.href);
 }

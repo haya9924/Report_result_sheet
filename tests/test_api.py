@@ -155,6 +155,17 @@ class TestComputeAndResults:
         md = with_density.get("/api/reports/dens/export?format=md").text
         assert "| rho | 2.70 |" in md
 
+        r = with_density.get("/api/reports/dens/export?format=csv")
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("text/csv")
+        assert "attachment" in r.headers["content-disposition"]
+        import csv
+        import io
+        rows = list(csv.DictReader(io.StringIO(r.text)))
+        rho_row = next(x for x in rows if x["section"] == "derived" and x["name"] == "rho")
+        assert rho_row["display"] == "2.70"
+        assert rho_row["value"] == repr(12.345 / 4.567)
+
 
 def test_index_served(client):
     r = client.get("/")

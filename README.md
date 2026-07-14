@@ -30,7 +30,7 @@ resultsheet serve            # http://127.0.0.1:8000/ をブラウザで開く
 3. **結果入力**: 測定値を入力すると導出量が即時に再計算され、丸め値(大)+フル精度値(小)+計算式が表示されます。表は行の追加・削除が可能
 4. **散布図**: 任意の 2 列を選んで散布図を表示。フィット直線(最小二乗)を重ねられます
 5. **保存**: 「保存」で `results.json` に書き込み
-6. **エクスポート**: JSON / Markdown を表示・コピー・ダウンロード
+6. **エクスポート**: JSON / Markdown / CSV を表示・コピー・ダウンロード
 
 ## AI 向け CLI(CUI からのデータ取得)
 
@@ -45,6 +45,7 @@ LaTeX 執筆時、AI は数値を自分で計算・転記せず、必ず以下�
 resultsheet list                         # レポート一覧
 resultsheet show <report> --format json  # 全結果ダンプ(主要参照点)
 resultsheet show <report> --format md    # 人間/執筆用の表形式
+resultsheet show <report> --format csv   # 表計算ソフト/pandas 用の平坦化CSV
 resultsheet get  <report> <var>          # 1変数の value / display / unit / expr
 resultsheet verify <report>              # 保存値と再計算の一致検証(exit 0/1)
 resultsheet validate <path.yaml>         # 定義YAMLの静的検証(exit 0/1)
@@ -85,6 +86,20 @@ resultsheet get <report> g_error                 # 後付けした誤差を参�
   "rounding": {"sigfigs": 4}
 }
 ```
+
+### CSV 出力(表計算ソフト・pandas 向け)
+
+`--format csv` は測定値・表(入力列/導出列)・スカラー導出量を **1行1データ点に平坦化した long/tidy 形式**で出力します。列は固定で `section, table, row, name, label, value, display, unit, expr, range_warning`。`section` は `input` / `table_column` / `derived_column` / `derived` のいずれかで、`value` は常にフル精度、`display` は丸め済み表示値です。
+
+```
+section,table,row,name,label,value,display,unit,expr,range_warning
+input,,,m,質量,12.345,12.345,g,,
+derived,,,rho,密度,2.7030873658857018,2.70,g/cm^3,m / V,
+table_column,drops,1,h,落下距離,0.5,0.5,m,,
+derived_column,drops,1,t2,時間の二乗,0.1024,0.1024,s^2,t ** 2,
+```
+
+Excel や `pandas.read_csv()` にそのまま読み込め、GUI のエクスポート画面(JSON/Markdown/CSV を切り替えてコピー・ダウンロード)からも取得できます。
 
 ## 定義 YAML(計算方式)のスキーマ
 

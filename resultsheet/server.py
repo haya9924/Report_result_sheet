@@ -12,7 +12,7 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
-from resultsheet.cli import build_show_payload, render_markdown
+from resultsheet.cli import build_csv_rows, build_show_payload, render_csv, render_markdown
 from resultsheet.engine.compute import compute_all, fit_line
 from resultsheet.errors import EvalError, ResultSheetError, StoreError
 from resultsheet.schema import Definition, load_definition
@@ -119,6 +119,12 @@ def create_app(reports_dir: Path) -> FastAPI:
 
     @app.get("/api/reports/{report_id}/export")
     def export(report_id: str, format: str = "json"):
+        if format == "csv":
+            rows = _wrap(lambda: build_csv_rows(store, report_id))
+            headers = {"Content-Disposition": f'attachment; filename="{report_id}.csv"'}
+            return PlainTextResponse(
+                render_csv(rows), media_type="text/csv; charset=utf-8", headers=headers
+            )
         payload = _wrap(lambda: build_show_payload(store, report_id))
         if format == "md":
             return PlainTextResponse(

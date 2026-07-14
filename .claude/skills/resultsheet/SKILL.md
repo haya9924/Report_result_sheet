@@ -51,6 +51,7 @@ resultsheet --reports-dir /path/to/reports list
 resultsheet list [--json]                     # レポート一覧
 resultsheet show <report> --format json       # 全結果ダンプ(主要参照点)
 resultsheet show <report> --format md         # 執筆用の表形式
+resultsheet show <report> --format csv        # 表計算ソフト/pandas 向け平坦化CSV
 resultsheet get  <report> <var> [--json]      # 1変数の value/display/unit/expr
 resultsheet verify <report>                   # 保存値と再計算の一致検証(exit 0/1)
 resultsheet validate <path.yaml>              # 定義YAMLの静的検証(exit 0/1)
@@ -70,6 +71,11 @@ resultsheet set-definition <report> <path|->  # 計算方式を差し替え+既�
   "rounding": {"sigfigs": 4}
 }
 ```
+
+`--format csv` はデータ点1行=1レコードの long/tidy 形式(列: section, table, row,
+name, label, value, display, unit, expr, range_warning)。表計算ソフトへの受け渡し
+やスプレッドシート化を頼まれたときはこれを使う。value/display は json と同じく
+必ず両方入っているので、ここでも display をそのまま使い value を再丸めしない。
 
 → LaTeX には `9.815` と `\mathrm{m/s^2}` を書き、さらに別の計算に使うときは
 `value`(9.815362392947714)を式に入れる。

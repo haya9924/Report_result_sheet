@@ -42,6 +42,45 @@ class TestShow:
         assert code == 1
         assert "存在しません" in err
 
+    def test_csv(self, reports_dir, capsys):
+        import csv
+        import io
+
+        code, out, _ = run(["show", "dens", "--format", "csv"], reports_dir, capsys)
+        assert code == 0
+        rows = list(csv.DictReader(io.StringIO(out)))
+        assert rows[0]["section"] == "input"
+
+        by_name = {(r["section"], r["name"]): r for r in rows}
+        m_row = by_name[("input", "m")]
+        assert m_row["value"] == repr(12.345)
+        assert m_row["unit"] == "g"
+
+        rho_row = by_name[("derived", "rho")]
+        assert rho_row["value"] == repr(12.345 / 4.567)
+        assert rho_row["display"] == "2.70"
+        assert rho_row["expr"] == "m / V"
+        assert rho_row["unit"] == "g/cm^3"
+
+    def test_csv_table_rows(self, tmp_path, capsys, free_fall_data):
+        d = tmp_path / "reports"
+        store = ReportStore(d)
+        store.create("ff", get_template("free_fall"))
+        store.save_results("ff", {}, free_fall_data)
+        code, out, _ = run(["show", "ff", "--format", "csv"], d, capsys)
+        assert code == 0
+        import csv
+        import io
+        rows = list(csv.DictReader(io.StringIO(out)))
+        h_rows = [r for r in rows if r["section"] == "table_column" and r["name"] == "h"]
+        assert len(h_rows) == 5
+        assert h_rows[0]["table"] == "drops"
+        assert h_rows[0]["row"] == "1"
+        t2_rows = [r for r in rows if r["section"] == "derived_column" and r["name"] == "t2"]
+        assert len(t2_rows) == 5
+        assert t2_rows[0]["value"] == repr(0.320 ** 2)
+        assert t2_rows[0]["expr"] == "t ** 2"
+
 
 class TestGet:
     def test_plain(self, reports_dir, capsys):

@@ -13,6 +13,8 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import sys
 from pathlib import Path
@@ -66,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("show", help="レポートの全結果ダンプ(AIの主要参照点)")
     p.add_argument("report")
-    p.add_argument("--format", choices=["json", "md"], default="json")
+    p.add_argument("--format", choices=["json", "md", "csv"], default="json")
     p.set_defaults(func=cmd_show)
 
     p = sub.add_parser("get", help="特定変数の値・式・表示値を取得")
@@ -227,7 +229,98 @@ def _flatten_range_warnings(definition, result) -> list[str]:
     return msgs
 
 
+CSV_FIELDS = [
+    "section", "table", "row", "name", "label",
+    "value", "display", "unit", "expr", "range_warning",
+]
+
+
+def build_csv_rows(store: ReportStore, report_id: str) -> list[dict]:
+    """CSV(long/tidy 形式)の行を組み立てる。
+
+    測定値・表(入力列/導出列)・スカラー導出量を 1 行 1 データ点に平坦化する。
+    表計算ソフトや pandas でそのまま読める形式。value はフル精度、display は
+    丸め済み表示値(未指定なら生値の repr)を必ず併記する。
+    """
+    report = store.load(report_id)
+    saved = report.results or {}
+    inputs = saved.get("inputs", {})
+    tables = saved.get("tables", {})
+    result = compute_all(report.definition, inputs, tables)
+    d = report.definition
+
+    rows: list[dict] = []
+    for i in d.inputs:
+        v = inputs.get(i.name)
+        rows.append({
+            "section": "input", "table": "", "row": "",
+            "name": i.name, "label": i.label,
+            "value": v, "display": _raw_display(v),
+            "unit": i.unit or "", "expr": "",
+            "range_warning": result.range_warnings["inputs"].get(i.name, ""),
+        })
+
+    for t in d.tables:
+        table_data = tables.get(t.name, {})
+        col_names = table_data.get("columns", [c.name for c in t.columns])
+        table_rows = table_data.get("rows", [])
+        col_warn = result.range_warnings["columns"].get(t.name, {})
+        for r_idx, row in enumerate(table_rows):
+            by_col = dict(zip(col_names, row))
+            for c in t.columns:
+                v = by_col.get(c.name)
+                rows.append({
+                    "section": "table_column", "table": t.name, "row": r_idx + 1,
+                    "name": c.name, "label": c.label,
+                    "value": v, "display": _raw_display(v),
+                    "unit": c.unit or "", "expr": "",
+                    "range_warning": col_warn.get(c.name, {}).get(r_idx, ""),
+                })
+        dcol_warn = result.range_warnings["derived_columns"].get(t.name, {})
+        for dc in t.derived_columns:
+            vec = result.computed_columns[t.name][dc.name]
+            disp = result.computed_columns_display[t.name][dc.name]
+            warn = dcol_warn.get(dc.name, {})
+            for r_idx, v in enumerate(vec):
+                rows.append({
+                    "section": "derived_column", "table": t.name, "row": r_idx + 1,
+                    "name": dc.name, "label": dc.label or dc.name,
+                    "value": v, "display": disp[r_idx],
+                    "unit": dc.unit or "", "expr": dc.expr,
+                    "range_warning": warn.get(r_idx, ""),
+                })
+
+    for dv in d.derived:
+        e = result.computed[dv.name]
+        rows.append({
+            "section": "derived", "table": "", "row": "",
+            "name": dv.name, "label": dv.label or "",
+            "value": e["value"], "display": e["display"],
+            "unit": dv.unit or "", "expr": dv.expr,
+            "range_warning": e.get("range_warning", ""),
+        })
+    return rows
+
+
+def _raw_display(v) -> str:
+    """丸め設定を持たない生値(測定値)の表示文字列。None は空欄。"""
+    return "" if v is None else repr(v)
+
+
+def render_csv(rows: list[dict]) -> str:
+    """CSV 行のリストを RFC4046 準拠の CSV テキストにする(改行は \\n 統一)。"""
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=CSV_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    return buf.getvalue()
+
+
 def cmd_show(args) -> int:
+    if args.format == "csv":
+        sys.stdout.write(render_csv(build_csv_rows(_store(args), args.report)))
+        return 0
     payload = build_show_payload(_store(args), args.report)
     if args.format == "json":
         _dump_json(payload)
