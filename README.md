@@ -87,19 +87,29 @@ resultsheet get <report> g_error                 # 後付けした誤差を参�
 }
 ```
 
-### CSV 出力(表計算ソフト・pandas 向け)
+### CSV 出力(Excel で見やすいレポート形式)
 
-`--format csv` は測定値・表(入力列/導出列)・スカラー導出量を **1行1データ点に平坦化した long/tidy 形式**で出力します。列は固定で `section, table, row, name, label, value, display, unit, expr, range_warning`。`section` は `input` / `table_column` / `derived_column` / `derived` のいずれかで、`value` は常にフル精度、`display` は丸め済み表示値です。
+`--format csv` は、ブラウザの入力画面と同じ構成(**測定値 → 表 → 導出量 → 妥当範囲の警告**)を、セクション見出しと表グリッドで出力します。Excel などで開くと各セクションがそのまま表として並びます。
 
 ```
-section,table,row,name,label,value,display,unit,expr,range_warning
-input,,,m,質量,12.345,12.345,g,,
-derived,,,rho,密度,2.7030873658857018,2.70,g/cm^3,m / V,
-table_column,drops,1,h,落下距離,0.5,0.5,m,,
-derived_column,drops,1,t2,時間の二乗,0.1024,0.1024,s^2,t ** 2,
+自由落下による重力加速度の測定
+落下距離 h と落下時間 t を繰り返し測定し …
+
+■ 表: 落下測定 (drops)
+#,落下距離 [m],落下時間 [s],時間の二乗 [s^2]
+1,0.5,0.32,0.1024
+2,1.0,0.452,0.2043
+ …
+
+■ 導出量
+変数,ラベル,表示値,単位,フル精度値,式,警告
+g_measured,重力加速度の測定値 (g = 2a),9.815,m/s^2,9.815362392947714,2 * a_slope,
 ```
 
-Excel や `pandas.read_csv()` にそのまま読み込め、GUI のエクスポート画面(JSON/Markdown/CSV を切り替えてコピー・ダウンロード)からも取得できます。
+- 導出量は **表示値(丸め済み)とフル精度値の両方**を列に併記します(丸め誤差防止の要)。
+- 先頭に UTF-8 BOM を付けているので、**Excel で開いても日本語が文字化けしません**。
+- GUI のエクスポート画面(JSON/Markdown/CSV を切り替えてコピー・ダウンロード)からも取得できます。
+- 数値だけを機械処理したい場合は `--format json`(全データがフル精度で入っています)を使ってください。
 
 ## 定義 YAML(計算方式)のスキーマ
 

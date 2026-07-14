@@ -161,10 +161,12 @@ class TestComputeAndResults:
         assert "attachment" in r.headers["content-disposition"]
         import csv
         import io
-        rows = list(csv.DictReader(io.StringIO(r.text)))
-        rho_row = next(x for x in rows if x["section"] == "derived" and x["name"] == "rho")
-        assert rho_row["display"] == "2.70"
-        assert rho_row["value"] == repr(12.345 / 4.567)
+        text = r.text.lstrip("\ufeff")  # Excel 用 BOM を取り除いてから解析
+        rows = list(csv.reader(io.StringIO(text)))
+        assert ["■ 導出量"] in rows
+        rho_row = next(x for x in rows if x and x[0] == "rho")
+        assert rho_row[2] == "2.70"                  # 表示値
+        assert rho_row[4] == repr(12.345 / 4.567)    # フル精度値
 
 
 def test_index_served(client):

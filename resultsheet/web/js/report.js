@@ -345,7 +345,13 @@ async function openExport(reportId) {
 }
 
 function downloadText(id, text, format) {
-  const blob = new Blob([text], { type: format.mime });
+  // CSV は Excel が UTF-8 と認識できるよう先頭に BOM を付ける
+  // (fetch().text() は BOM を除去するため、ダウンロード時に補う)
+  let content = text;
+  if (format.ext === "csv" && !content.startsWith("\uFEFF")) {
+    content = "\uFEFF" + content;
+  }
+  const blob = new Blob([content], { type: format.mime });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${id}.${format.ext}`;

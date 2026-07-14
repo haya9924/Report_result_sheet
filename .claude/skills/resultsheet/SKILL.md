@@ -72,10 +72,12 @@ resultsheet set-definition <report> <path|->  # 計算方式を差し替え+既�
 }
 ```
 
-`--format csv` はデータ点1行=1レコードの long/tidy 形式(列: section, table, row,
-name, label, value, display, unit, expr, range_warning)。表計算ソフトへの受け渡し
-やスプレッドシート化を頼まれたときはこれを使う。value/display は json と同じく
-必ず両方入っているので、ここでも display をそのまま使い value を再丸めしない。
+`--format csv` は Excel で見やすいレポート形式(ブラウザ入力画面と同じく
+測定値・表グリッド・導出量・警告のセクション構成、先頭に UTF-8 BOM 付きで
+日本語も文字化けしない)。ユーザーに Excel/スプレッドシートでの受け渡しや
+表として見せるときに使う。導出量は表示値とフル精度値を併記するので、ここでも
+display をそのまま使い value を再丸めしない。数値だけを機械処理したいときは
+csv ではなく json(全データがフル精度)を使う。
 
 → LaTeX には `9.815` と `\mathrm{m/s^2}` を書き、さらに別の計算に使うときは
 `value`(9.815362392947714)を式に入れる。

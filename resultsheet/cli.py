@@ -229,18 +229,13 @@ def _flatten_range_warnings(definition, result) -> list[str]:
     return msgs
 
 
-CSV_FIELDS = [
-    "section", "table", "row", "name", "label",
-    "value", "display", "unit", "expr", "range_warning",
-]
+def build_csv_rows(store: ReportStore, report_id: str) -> list[list]:
+    """Excel で見やすいレポート形式の CSV 行を組み立てる。
 
-
-def build_csv_rows(store: ReportStore, report_id: str) -> list[dict]:
-    """CSV(long/tidy 形式)の行を組み立てる。
-
-    測定値・表(入力列/導出列)・スカラー導出量を 1 行 1 データ点に平坦化する。
-    表計算ソフトや pandas でそのまま読める形式。value はフル精度、display は
-    丸め済み表示値(未指定なら生値の repr)を必ず併記する。
+    ブラウザの入力画面と同じ構成(測定値 → 表 → 導出量 → 妥当範囲の警告)を、
+    セクション見出しと表グリッドで表現する。表計算ソフトで開くと各セクションが
+    そのまま表として並ぶ。数値はそのまま出力し Excel で数値として扱われる。
+    導出量はフル精度値も別列に併記する(このシステムの丸め誤差防止の要)。
     """
     report = store.load(report_id)
     saved = report.results or {}
@@ -249,72 +244,85 @@ def build_csv_rows(store: ReportStore, report_id: str) -> list[dict]:
     result = compute_all(report.definition, inputs, tables)
     d = report.definition
 
-    rows: list[dict] = []
-    for i in d.inputs:
-        v = inputs.get(i.name)
-        rows.append({
-            "section": "input", "table": "", "row": "",
-            "name": i.name, "label": i.label,
-            "value": v, "display": _raw_display(v),
-            "unit": i.unit or "", "expr": "",
-            "range_warning": result.range_warnings["inputs"].get(i.name, ""),
-        })
+    rows: list[list] = [[d.title]]
+    if d.description:
+        rows.append([d.description])
+    if saved.get("saved_at"):
+        rows.append([f"保存日時: {saved['saved_at']}"])
 
+    # 測定値
+    if d.inputs:
+        rows += [[], ["■ 測定値"], ["変数", "ラベル", "値", "単位", "妥当範囲の警告"]]
+        for i in d.inputs:
+            rows.append([
+                i.name, i.label, _csv_val(inputs.get(i.name)), i.unit or "",
+                result.range_warnings["inputs"].get(i.name, ""),
+            ])
+
+    # 表(入力列 + 導出列を1つのグリッドに)
     for t in d.tables:
+        rows += [[], [f"■ 表: {t.label} ({t.name})"]]
+        header = ["#"]
+        for c in t.columns:
+            header.append(_with_unit(c.label, c.unit))
+        for dc in t.derived_columns:
+            header.append(_with_unit(dc.label or dc.name, dc.unit))
+        rows.append(header)
         table_data = tables.get(t.name, {})
         col_names = table_data.get("columns", [c.name for c in t.columns])
         table_rows = table_data.get("rows", [])
-        col_warn = result.range_warnings["columns"].get(t.name, {})
+        disp = result.computed_columns_display.get(t.name, {})
         for r_idx, row in enumerate(table_rows):
             by_col = dict(zip(col_names, row))
+            line = [r_idx + 1]
             for c in t.columns:
-                v = by_col.get(c.name)
-                rows.append({
-                    "section": "table_column", "table": t.name, "row": r_idx + 1,
-                    "name": c.name, "label": c.label,
-                    "value": v, "display": _raw_display(v),
-                    "unit": c.unit or "", "expr": "",
-                    "range_warning": col_warn.get(c.name, {}).get(r_idx, ""),
-                })
-        dcol_warn = result.range_warnings["derived_columns"].get(t.name, {})
-        for dc in t.derived_columns:
-            vec = result.computed_columns[t.name][dc.name]
-            disp = result.computed_columns_display[t.name][dc.name]
-            warn = dcol_warn.get(dc.name, {})
-            for r_idx, v in enumerate(vec):
-                rows.append({
-                    "section": "derived_column", "table": t.name, "row": r_idx + 1,
-                    "name": dc.name, "label": dc.label or dc.name,
-                    "value": v, "display": disp[r_idx],
-                    "unit": dc.unit or "", "expr": dc.expr,
-                    "range_warning": warn.get(r_idx, ""),
-                })
+                line.append(_csv_val(by_col.get(c.name)))
+            for dc in t.derived_columns:
+                vec = disp.get(dc.name, [])
+                line.append(vec[r_idx] if r_idx < len(vec) else "")
+            rows.append(line)
 
-    for dv in d.derived:
-        e = result.computed[dv.name]
-        rows.append({
-            "section": "derived", "table": "", "row": "",
-            "name": dv.name, "label": dv.label or "",
-            "value": e["value"], "display": e["display"],
-            "unit": dv.unit or "", "expr": dv.expr,
-            "range_warning": e.get("range_warning", ""),
-        })
+    # 導出量(表示値とフル精度値を併記)
+    if d.derived:
+        rows += [[], ["■ 導出量"],
+                 ["変数", "ラベル", "表示値", "単位", "フル精度値", "式", "警告"]]
+        for dv in d.derived:
+            e = result.computed[dv.name]
+            rows.append([
+                dv.name, dv.label or "", e["display"], dv.unit or "",
+                _csv_val(e["value"]), dv.expr,
+                e.get("range_warning") or e.get("error") or "",
+            ])
+
+    # 妥当範囲の警告(あれば)
+    warnings = _flatten_range_warnings(d, result)
+    if warnings:
+        rows += [[], ["■ 妥当範囲の警告"]]
+        rows += [["⚠ " + w] for w in warnings]
+
     return rows
 
 
-def _raw_display(v) -> str:
-    """丸め設定を持たない生値(測定値)の表示文字列。None は空欄。"""
-    return "" if v is None else repr(v)
+def _with_unit(label: str, unit: str | None) -> str:
+    return f"{label} [{unit}]" if unit else label
 
 
-def render_csv(rows: list[dict]) -> str:
-    """CSV 行のリストを RFC4046 準拠の CSV テキストにする(改行は \\n 統一)。"""
+def _csv_val(v):
+    """数値はそのまま(Excel が数値として扱う)。未入力は空欄。"""
+    return "" if v is None else v
+
+
+def render_csv(rows: list[list]) -> str:
+    """CSV 行を CSV テキストにする。
+
+    先頭に UTF-8 BOM を付け、Excel で開いたときに日本語が文字化けしないようにする
+    (Excel は BOM が無いと環境の既定エンコーディングで開いてしまうため)。
+    """
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=CSV_FIELDS, lineterminator="\n")
-    writer.writeheader()
+    writer = csv.writer(buf, lineterminator="\r\n")
     for row in rows:
         writer.writerow(row)
-    return buf.getvalue()
+    return "\ufeff" + buf.getvalue()
 
 
 def cmd_show(args) -> int:

@@ -48,21 +48,24 @@ class TestShow:
 
         code, out, _ = run(["show", "dens", "--format", "csv"], reports_dir, capsys)
         assert code == 0
-        rows = list(csv.DictReader(io.StringIO(out)))
-        assert rows[0]["section"] == "input"
+        # Excel 用に UTF-8 BOM 付き
+        assert out.startswith("\ufeff")
+        rows = list(csv.reader(io.StringIO(out.lstrip("\ufeff"))))
+        # レポート形式: タイトル・セクション見出しを含む
+        assert rows[0] == ["金属試料の密度測定"]
+        assert ["■ 測定値"] in rows
+        assert ["■ 導出量"] in rows
 
-        by_name = {(r["section"], r["name"]): r for r in rows}
-        m_row = by_name[("input", "m")]
-        assert m_row["value"] == repr(12.345)
-        assert m_row["unit"] == "g"
+        m_row = next(r for r in rows if r and r[0] == "m")
+        assert m_row[2] == "12.345"          # 値
+        assert m_row[3] == "g"               # 単位
 
-        rho_row = by_name[("derived", "rho")]
-        assert rho_row["value"] == repr(12.345 / 4.567)
-        assert rho_row["display"] == "2.70"
-        assert rho_row["expr"] == "m / V"
-        assert rho_row["unit"] == "g/cm^3"
+        rho_row = next(r for r in rows if r and r[0] == "rho")
+        assert rho_row[2] == "2.70"                    # 表示値
+        assert rho_row[4] == repr(12.345 / 4.567)      # フル精度値
+        assert rho_row[5] == "m / V"                   # 式
 
-    def test_csv_table_rows(self, tmp_path, capsys, free_fall_data):
+    def test_csv_table_grid(self, tmp_path, capsys, free_fall_data):
         d = tmp_path / "reports"
         store = ReportStore(d)
         store.create("ff", get_template("free_fall"))
@@ -71,15 +74,19 @@ class TestShow:
         assert code == 0
         import csv
         import io
-        rows = list(csv.DictReader(io.StringIO(out)))
-        h_rows = [r for r in rows if r["section"] == "table_column" and r["name"] == "h"]
-        assert len(h_rows) == 5
-        assert h_rows[0]["table"] == "drops"
-        assert h_rows[0]["row"] == "1"
-        t2_rows = [r for r in rows if r["section"] == "derived_column" and r["name"] == "t2"]
-        assert len(t2_rows) == 5
-        assert t2_rows[0]["value"] == repr(0.320 ** 2)
-        assert t2_rows[0]["expr"] == "t ** 2"
+        rows = list(csv.reader(io.StringIO(out.lstrip("\ufeff"))))
+        # 表はグリッド: 単位つきヘッダ + 各行 1 レコード
+        header = next(r for r in rows if r and r[0] == "#")
+        assert "落下距離 [m]" in header
+        assert "時間の二乗 [s^2]" in header
+        data_start = rows.index(header) + 1
+        first = rows[data_start]
+        assert first[0] == "1"          # 行番号
+        assert first[1] == "0.5"        # h
+        assert first[3] == "0.1024"     # t2 の表示値(グリッドセル)
+        # 5 行分ある
+        grid = rows[data_start:data_start + 5]
+        assert [r[0] for r in grid] == ["1", "2", "3", "4", "5"]
 
 
 class TestGet:
