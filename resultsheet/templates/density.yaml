@@ -9,10 +9,12 @@ inputs:
     label: 質量
     unit: g
     description: 電子天秤の読み(0.001 g 精度)
+    range: {min: 0, max: 5000}          # 妥当範囲(これを外れると赤く警告)
   - name: V
     label: 体積
     unit: cm^3
     description: メスシリンダーによる水置換法
+    range: {min: 0, max: 5000}
 
 derived:
   - name: rho
@@ -20,6 +22,8 @@ derived:
     expr: "m / V"
     unit: g/cm^3
     display: {sigfigs: 3}
+    # 固体・液体の密度としてあり得る範囲(リチウム〜オスミウム程度)
+    range: {min: 0.5, max: 25, message: "測定・計算ミスの可能性があります"}
   - name: rho_ratio
     label: 鉄の文献値 (7.874 g/cm^3) との比
     expr: "rho / 7.874"

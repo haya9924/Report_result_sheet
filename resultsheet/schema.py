@@ -36,6 +36,7 @@ class Input:
     unit: str | None = None
     description: str | None = None
     display: dict | None = None
+    range: dict | None = None
 
 
 @dataclass
@@ -44,6 +45,7 @@ class Column:
     label: str
     unit: str | None = None
     description: str | None = None
+    range: dict | None = None
 
 
 @dataclass
@@ -53,6 +55,7 @@ class DerivedColumn:
     label: str | None = None
     unit: str | None = None
     display: dict | None = None
+    range: dict | None = None
 
 
 @dataclass
@@ -73,6 +76,7 @@ class Derived:
     unit: str | None = None
     description: str | None = None
     display: dict | None = None
+    range: dict | None = None
 
 
 @dataclass
@@ -173,7 +177,7 @@ def _parse_inputs(raw) -> list[Input]:
         ctx = f"inputs[{i}]"
         if not isinstance(item, dict):
             raise DefinitionError(f"{ctx} はマッピングにしてください")
-        _check_keys(item, {"name", "label", "unit", "description", "display"}, ctx)
+        _check_keys(item, {"name", "label", "unit", "description", "display", "range"}, ctx)
         out.append(
             Input(
                 name=_req_str(item, "name", ctx),
@@ -181,6 +185,7 @@ def _parse_inputs(raw) -> list[Input]:
                 unit=_opt_str(item, "unit", ctx),
                 description=_opt_str(item, "description", ctx),
                 display=_parse_display(item.get("display"), ctx),
+                range=_parse_range(item.get("range"), ctx),
             )
         )
     return out
@@ -210,13 +215,14 @@ def _parse_tables(raw) -> list[Table]:
             cctx = f"{ctx}.columns[{j}]"
             if not isinstance(c, dict):
                 raise DefinitionError(f"{cctx} はマッピングにしてください")
-            _check_keys(c, {"name", "label", "unit", "description"}, cctx)
+            _check_keys(c, {"name", "label", "unit", "description", "range"}, cctx)
             columns.append(
                 Column(
                     name=_req_str(c, "name", cctx),
                     label=_req_str(c, "label", cctx),
                     unit=_opt_str(c, "unit", cctx),
                     description=_opt_str(c, "description", cctx),
+                    range=_parse_range(c.get("range"), cctx),
                 )
             )
         dcols = []
@@ -224,7 +230,7 @@ def _parse_tables(raw) -> list[Table]:
             cctx = f"{ctx}.derived_columns[{j}]"
             if not isinstance(c, dict):
                 raise DefinitionError(f"{cctx} はマッピングにしてください")
-            _check_keys(c, {"name", "label", "expr", "unit", "display"}, cctx)
+            _check_keys(c, {"name", "label", "expr", "unit", "display", "range"}, cctx)
             dcols.append(
                 DerivedColumn(
                     name=_req_str(c, "name", cctx),
@@ -232,6 +238,7 @@ def _parse_tables(raw) -> list[Table]:
                     label=_opt_str(c, "label", cctx),
                     unit=_opt_str(c, "unit", cctx),
                     display=_parse_display(c.get("display"), cctx),
+                    range=_parse_range(c.get("range"), cctx),
                 )
             )
         min_rows = item.get("min_rows", DEFAULT_MIN_ROWS)
@@ -260,7 +267,9 @@ def _parse_derived(raw) -> list[Derived]:
         ctx = f"derived[{i}]"
         if not isinstance(item, dict):
             raise DefinitionError(f"{ctx} はマッピングにしてください")
-        _check_keys(item, {"name", "label", "expr", "unit", "description", "display"}, ctx)
+        _check_keys(
+            item, {"name", "label", "expr", "unit", "description", "display", "range"}, ctx
+        )
         out.append(
             Derived(
                 name=_req_str(item, "name", ctx),
@@ -269,6 +278,7 @@ def _parse_derived(raw) -> list[Derived]:
                 unit=_opt_str(item, "unit", ctx),
                 description=_opt_str(item, "description", ctx),
                 display=_parse_display(item.get("display"), ctx),
+                range=_parse_range(item.get("range"), ctx),
             )
         )
     return out
@@ -293,6 +303,38 @@ def _parse_display(raw, ctx: str) -> dict | None:
     if not isinstance(n, int) or n < 0:
         raise DefinitionError(f"{ctx}.display.decimals は 0 以上の整数にしてください")
     return {"decimals": n}
+
+
+def _parse_range(raw, ctx: str) -> dict | None:
+    """妥当範囲 range: {min, max, message?} をパース・検証する。
+
+    min / max は片方だけの指定も可(下限のみ・上限のみ)。誤差を考えても
+    あり得ない範囲の外側を弾くための緩い境界を想定。範囲外でも入力自体は
+    ブロックせず、警告を出すためだけに使う。
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise DefinitionError(
+            f"{ctx}.range は {{min: 数値, max: 数値}} の形にしてください"
+        )
+    _check_keys(raw, {"min", "max", "message"}, f"{ctx}.range")
+    lo, hi = raw.get("min"), raw.get("max")
+    if lo is None and hi is None:
+        raise DefinitionError(f"{ctx}.range は min か max の少なくとも一方が必要です")
+    for key, v in (("min", lo), ("max", hi)):
+        if v is not None and not _is_number(v):
+            raise DefinitionError(f"{ctx}.range.{key} は数値にしてください")
+    if lo is not None and hi is not None and float(lo) > float(hi):
+        raise DefinitionError(f"{ctx}.range は min <= max にしてください")
+    message = raw.get("message")
+    if message is not None and not isinstance(message, str):
+        raise DefinitionError(f"{ctx}.range.message は文字列にしてください")
+    return {
+        "min": float(lo) if lo is not None else None,
+        "max": float(hi) if hi is not None else None,
+        "message": message,
+    }
 
 
 # ------------------------------------------------------------ 検証(名前・式)

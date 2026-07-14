@@ -95,6 +95,7 @@ def create_app(reports_dir: Path) -> FastAPI:
             "computed_columns": result.computed_columns,
             "computed_columns_display": result.computed_columns_display,
             "errors": result.errors,
+            "range_warnings": result.range_warnings,
         }
         adhoc = body.get("adhoc_fit")
         if adhoc:
@@ -204,6 +205,7 @@ def _definition_json(d: Definition) -> dict:
                 "unit": i.unit,
                 "description": i.description,
                 "display": i.display,
+                "range": i.range,
             }
             for i in d.inputs
         ],
@@ -219,6 +221,7 @@ def _definition_json(d: Definition) -> dict:
                         "label": c.label,
                         "unit": c.unit,
                         "description": c.description,
+                        "range": c.range,
                     }
                     for c in t.columns
                 ],
@@ -229,6 +232,7 @@ def _definition_json(d: Definition) -> dict:
                         "expr": dc.expr,
                         "unit": dc.unit,
                         "display": dc.display,
+                        "range": dc.range,
                     }
                     for dc in t.derived_columns
                 ],
@@ -243,6 +247,7 @@ def _definition_json(d: Definition) -> dict:
                 "unit": dv.unit,
                 "description": dv.description,
                 "display": dv.display,
+                "range": dv.range,
             }
             for dv in d.derived
         ],

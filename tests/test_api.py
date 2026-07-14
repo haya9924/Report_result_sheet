@@ -119,6 +119,18 @@ class TestComputeAndResults:
         assert r.json()["computed"]["rho"]["value"] is None
         assert r.json()["computed"]["rho"]["display"] == "—"
 
+    def test_compute_returns_range_warnings(self, with_density):
+        r = with_density.post(
+            "/api/reports/dens/compute",
+            json={"inputs": {"m": 12.0, "V": 9999.0}, "tables": {}},
+        )
+        rw = r.json()["range_warnings"]
+        assert "V" in rw["inputs"]           # 入力が範囲外
+        assert "rho" in rw["derived"]        # 導出量も範囲外
+        # 定義にも range が含まれる(GUI がヒント表示に使う)
+        definition = with_density.get("/api/reports/dens").json()["definition"]
+        assert definition["inputs"][0]["range"] is not None
+
     def test_adhoc_fit(self, client, free_fall_data):
         client.post("/api/reports", json={"id": "ff", "template": "free_fall"})
         r = client.post(

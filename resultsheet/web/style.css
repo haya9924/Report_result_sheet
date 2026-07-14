@@ -101,6 +101,11 @@ button:disabled { opacity: .45; cursor: default; }
 input.invalid { border-color: var(--danger); background: #fef2f2; }
 input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
 
+/* 妥当範囲を外れた値の警告(赤) */
+input.out-of-range { border-color: var(--danger); background: #fef2f2; color: var(--danger); }
+.field-warn { color: var(--danger); font-size: 12px; margin-top: 3px; }
+.field-warn:empty { display: none; }
+
 /* ---- tables ---- */
 .table-wrap { overflow-x: auto; }
 table.data { border-collapse: collapse; width: 100%; }
@@ -112,7 +117,12 @@ table.data td input {
   font-family: var(--mono); font-size: 14px; width: 110px; border: none;
   padding: 4px 6px; text-align: right; background: transparent;
 }
+table.data td input.out-of-range {
+  background: #fef2f2; color: var(--danger);
+  outline: 1px solid var(--danger); border-radius: 4px;
+}
 table.data td.derived { background: var(--derived-bg); font-family: var(--mono); font-size: 13.5px; }
+table.data td.derived.cell-warn { background: #fef2f2; color: var(--danger); font-weight: 600; }
 table.data td.rowdel { width: 30px; }
 table.data td.rowdel button { border: none; color: var(--muted); padding: 0 6px; background: none; }
 table.data td.rowdel button:hover { color: var(--danger); }
@@ -131,6 +141,9 @@ table.data td.rowdel button:hover { color: var(--danger); }
 .derived-item .dexpr { color: var(--muted); font-size: 12.5px; }
 .derived-item .derror { color: var(--danger); font-size: 13px; width: 100%; }
 .derived-item.error .dvalue { color: var(--danger); }
+.derived-item .drange-warn { color: var(--danger); font-size: 13px; width: 100%; }
+.derived-item.out-of-range .dvalue { color: var(--danger); }
+.derived-item.out-of-range { background: #fef2f2; border-radius: 6px; padding: 6px 8px; }
 
 /* ---- scatter ---- */
 .scatter-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }

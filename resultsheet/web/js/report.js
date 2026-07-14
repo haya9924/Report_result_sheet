@@ -93,16 +93,20 @@ export async function renderReport(app, reportId) {
       const input = el("input", {
         type: "text", inputmode: "decimal",
         value: state.inputs[inp.name] ?? "",
+        "data-input-name": inp.name,
       });
       input.addEventListener("input", () => {
         state.inputs[inp.name] = parseNumberInput(input);
         markDirty();
         scheduleCompute();
       });
+      const warn = el("div", { class: "field-warn", "data-warn-for": inp.name });
       const field = el("div", { class: "field" },
         el("label", {}, inp.label + " ", el("span", { class: "mono muted" }, inp.name)),
         el("div", { class: "input-row" }, input, inp.unit ? el("span", { class: "unit" }, inp.unit) : ""),
         inp.description ? el("div", { class: "desc" }, inp.description) : "",
+        inp.range ? el("div", { class: "desc" }, "妥当範囲: " + rangeHint(inp.range, inp.unit)) : "",
+        warn,
       );
       grid.append(field);
     }
@@ -149,7 +153,7 @@ export async function renderReport(app, reportId) {
           scheduleCompute();
         });
         const label = c.unit ? `${c.label} [${c.unit}]` : c.label;
-        tr.append(el("td", { "data-label": label }, input));
+        tr.append(el("td", { "data-label": label, "data-incell": `${t.name}.${c.name}`, "data-row": ri }, input));
       });
       for (const c of derivedCols) {
         const label = c.unit ? `${c.label || c.name} [${c.unit}]` : (c.label || c.name);
@@ -181,8 +185,40 @@ export async function renderReport(app, reportId) {
     state.lastComputed = result;
     renderDerived(result);
     renderTableDerivedCells(result);
+    applyRangeWarnings(result.range_warnings || {});
     scatter.update(result);
     if (state.dirty) setTopbarStatus("● 未保存", "");
+  }
+
+  // ---- 妥当範囲チェックの表示 ---------------------------------------------
+  function applyRangeWarnings(rw) {
+    const inputs = rw.inputs || {};
+    const columns = rw.columns || {};
+    // スカラー入力ボックス
+    document.querySelectorAll("[data-input-name]").forEach((inp) => {
+      const msg = inputs[inp.dataset.inputName];
+      const warnEl = document.querySelector(`[data-warn-for="${inp.dataset.inputName}"]`);
+      if (msg) {
+        inp.classList.add("out-of-range");
+        if (warnEl) warnEl.textContent = "⚠ " + msg;
+      } else {
+        inp.classList.remove("out-of-range");
+        if (warnEl) warnEl.textContent = "";
+      }
+    });
+    // 表の入力セル
+    document.querySelectorAll("[data-incell]").forEach((cell) => {
+      const [tn, col] = cell.dataset.incell.split(".");
+      const msg = columns[tn]?.[col]?.[cell.dataset.row];
+      const input = cell.querySelector("input");
+      if (msg) {
+        input?.classList.add("out-of-range");
+        cell.title = msg;
+      } else {
+        input?.classList.remove("out-of-range");
+        cell.removeAttribute("title");
+      }
+    });
   }
 
   function renderDerived(result) {
@@ -190,7 +226,9 @@ export async function renderReport(app, reportId) {
     const list = el("div", { class: "derived-list" });
     for (const dv of def.derived) {
       const e = result.computed[dv.name] || {};
-      const item = el("div", { class: "derived-item" + (e.error ? " error" : "") });
+      const outOfRange = !!e.range_warning;
+      const cls = "derived-item" + (e.error ? " error" : "") + (outOfRange ? " out-of-range" : "");
+      const item = el("div", { class: cls });
       item.append(
         el("span", { class: "dname" }, dv.name),
         el("span", { class: "dvalue" }, e.display ?? "—"),
@@ -202,19 +240,25 @@ export async function renderReport(app, reportId) {
         el("span", { class: "dexpr mono" }, dv.expr),
       );
       if (e.error) item.append(el("span", { class: "derror" }, "⚠ " + e.error));
+      if (outOfRange) item.append(el("span", { class: "drange-warn" }, "⚠ " + e.range_warning));
       list.append(item);
     }
     derivedPanel.append(list);
   }
 
   function renderTableDerivedCells(result) {
+    const dcw = result.range_warnings?.derived_columns || {};
     for (const t of def.tables) {
       const disp = result.computed_columns_display?.[t.name] || {};
       for (const c of t.derived_columns) {
         const vals = disp[c.name] || [];
+        const warns = dcw[t.name]?.[c.name] || {};
         document.querySelectorAll(`[data-dcol="${t.name}.${c.name}"]`).forEach((cell) => {
           const ri = Number(cell.getAttribute("data-row"));
           cell.textContent = vals[ri] ?? "—";
+          const msg = warns[ri];
+          if (msg) { cell.classList.add("cell-warn"); cell.title = msg; }
+          else { cell.classList.remove("cell-warn"); cell.removeAttribute("title"); }
         });
       }
     }
@@ -235,6 +279,16 @@ export async function renderReport(app, reportId) {
     }
     return true;
   };
+}
+
+function rangeHint(range, unit) {
+  const u = unit ? " " + unit : "";
+  const lo = range.min !== null && range.min !== undefined ? `${range.min}${u}` : null;
+  const hi = range.max !== null && range.max !== undefined ? `${range.max}${u}` : null;
+  if (lo && hi) return `${lo} 〜 ${hi}`;
+  if (lo) return `${lo} 以上`;
+  if (hi) return `${hi} 以下`;
+  return "";
 }
 
 function reprFloat(v) {

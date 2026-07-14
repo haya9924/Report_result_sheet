@@ -10,8 +10,8 @@ tables:
     label: 落下測定
     min_rows: 5
     columns:
-      - {name: h, label: 落下距離, unit: m}
-      - {name: t, label: 落下時間, unit: s}
+      - {name: h, label: 落下距離, unit: m, range: {min: 0, max: 100}}
+      - {name: t, label: 落下時間, unit: s, range: {min: 0, max: 10}}
     derived_columns:
       - name: t2
         label: 時間の二乗
@@ -45,6 +45,8 @@ derived:
     expr: "2 * a_slope"
     unit: m/s^2
     display: {sigfigs: 4}
+    # 地表付近の g として妥当な範囲(誤差を考慮しても外れたら要確認)
+    range: {min: 8, max: 12, message: "測定・フィットを確認してください"}
   - name: g_error_percent
     label: 文献値 (9.80665 m/s^2) との相対誤差
     expr: "abs(g_measured - 9.80665) / 9.80665 * 100"

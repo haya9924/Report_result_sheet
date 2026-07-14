@@ -178,6 +178,8 @@ def build_show_payload(store: ReportStore, report_id: str) -> dict:
                 "value": inputs.get(i.name),
                 "unit": i.unit,
                 "label": i.label,
+                "range": i.range,
+                "range_warning": result.range_warnings["inputs"].get(i.name),
             }
             for i in d.inputs
         },
@@ -203,8 +205,26 @@ def build_show_payload(store: ReportStore, report_id: str) -> dict:
         },
         "derived": result.computed,
         "errors": result.errors,
+        # 妥当範囲を外れた値の一覧(AI が実装不能な値に気づけるように平坦化)
+        "range_warnings": _flatten_range_warnings(d, result),
     }
     return payload
+
+
+def _flatten_range_warnings(definition, result) -> list[str]:
+    """range_warnings を人間可読なメッセージのリストに平坦化する。"""
+    msgs: list[str] = []
+    for _, m in result.range_warnings["inputs"].items():
+        msgs.append(m)
+    for tname, cols in result.range_warnings["columns"].items():
+        for _, cells in cols.items():
+            msgs.extend(cells.values())
+    for tname, cols in result.range_warnings["derived_columns"].items():
+        for _, cells in cols.items():
+            msgs.extend(cells.values())
+    for _, m in result.range_warnings["derived"].items():
+        msgs.append(m)
+    return msgs
 
 
 def cmd_show(args) -> int:
@@ -260,6 +280,11 @@ def render_markdown(p: dict) -> str:
         for name, msg in p["errors"].items():
             lines.append(f"- **{name}**: {msg}")
         lines.append("")
+    if p.get("range_warnings"):
+        lines += ["### ⚠ 妥当範囲の警告", ""]
+        for msg in p["range_warnings"]:
+            lines.append(f"- ⚠ {msg}")
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -313,11 +338,12 @@ def cmd_get(args) -> int:
     if args.as_json:
         _dump_json(entry)
         return 0
-    for key in ("name", "kind", "label", "value", "values", "display", "unit", "expr", "rounding", "error"):
+    for key in ("name", "kind", "label", "value", "values", "display", "unit",
+                "expr", "rounding", "range", "range_warning", "error"):
         if key in entry and entry[key] is not None:
             v = entry[key]
-            if key == "rounding" and isinstance(v, dict):
-                v = ", ".join(f"{k}={val}" for k, val in v.items())
+            if key in ("rounding", "range") and isinstance(v, dict):
+                v = ", ".join(f"{k}={val}" for k, val in v.items() if val is not None)
             elif key in ("value",) and isinstance(v, float):
                 v = repr(v)
             elif isinstance(v, list):

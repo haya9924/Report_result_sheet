@@ -33,6 +33,14 @@ class ComputeResult:
     computed_columns_display: dict[str, dict[str, list]] = field(default_factory=dict)
     # 変数名 / "table.col" -> エラーメッセージ
     errors: dict[str, str] = field(default_factory=dict)
+    # 妥当範囲(range)を外れた値の警告。範囲外でも計算・保存はブロックしない。
+    #   inputs:  {入力名: メッセージ}
+    #   derived: {導出名: メッセージ}
+    #   columns: {テーブル名: {列名: {行index(int): メッセージ}}}
+    #   derived_columns: columns と同じ形
+    range_warnings: dict[str, dict] = field(default_factory=lambda: {
+        "inputs": {}, "derived": {}, "columns": {}, "derived_columns": {}
+    })
 
 
 def compute_all(definition: Definition, inputs: dict, tables: dict) -> ComputeResult:
@@ -50,6 +58,9 @@ def compute_all(definition: Definition, inputs: dict, tables: dict) -> ComputeRe
         ns[c.name] = c.value
     for i in definition.inputs:
         ns[i.name] = _as_number(inputs.get(i.name), i.name)
+        msg = range_warning(ns[i.name], i.range, i.label or i.name, i.unit)
+        if msg:
+            result.range_warnings["inputs"][i.name] = msg
 
     for t in definition.tables:
         col_vectors = _table_vectors(t, tables.get(t.name))
@@ -84,6 +95,20 @@ def compute_all(definition: Definition, inputs: dict, tables: dict) -> ComputeRe
             ]
             for name, vec in derived_vectors.items()
         }
+
+        # 入力列・導出列の各セルを妥当範囲でチェック
+        col_by_name = {c.name: c for c in t.columns}
+        for col, vec in col_vectors.items():
+            spec = col_by_name[col].range
+            if spec:
+                _check_column(result, "columns", t.name, col,
+                              col_by_name[col].label, col_by_name[col].unit, vec, spec)
+        for name, vec in derived_vectors.items():
+            dc = dcol_by_name[name]
+            if dc.range:
+                _check_column(result, "derived_columns", t.name, name,
+                              dc.label or name, dc.unit, vec, dc.range)
+
         for col, vec in col_vectors.items():
             ns[f"{t.name}.{col}"] = vec
         for name, vec in derived_vectors.items():
@@ -110,9 +135,44 @@ def compute_all(definition: Definition, inputs: dict, tables: dict) -> ComputeRe
         if error is not None:
             entry["error"] = error
             result.errors[name] = error
+        else:
+            msg = range_warning(value, dv.range, dv.label or dv.name, dv.unit)
+            if msg:
+                entry["range_warning"] = msg
+                result.range_warnings["derived"][name] = msg
         result.computed[name] = entry
 
     return result
+
+
+def range_warning(value, spec, label: str, unit: str | None) -> str | None:
+    """value が妥当範囲 spec を外れていれば警告メッセージを返す。範囲内・未入力は None。
+
+    「あり得ない範囲」を弾くための緩いチェック。範囲外でも入力・保存はブロックしない。
+    """
+    if value is None or spec is None:
+        return None
+    lo, hi = spec.get("min"), spec.get("max")
+    u = f" {unit}" if unit else ""
+    if lo is not None and value < lo:
+        base = f"{label} = {value}{u} は妥当範囲の下限 {lo}{u} を下回っています"
+    elif hi is not None and value > hi:
+        base = f"{label} = {value}{u} は妥当範囲の上限 {hi}{u} を上回っています"
+    else:
+        return None
+    custom = spec.get("message")
+    return f"{base}({custom})" if custom else base
+
+
+def _check_column(result, kind, tname, col, label, unit, vec, spec) -> None:
+    """列ベクトルの各セルを範囲チェックし、range_warnings に記録する。"""
+    cell_warnings: dict[int, str] = {}
+    for i, v in enumerate(vec):
+        msg = range_warning(v, spec, f"{label}[{i + 1}行目]", unit)
+        if msg:
+            cell_warnings[i] = msg
+    if cell_warnings:
+        result.range_warnings[kind].setdefault(tname, {})[col] = cell_warnings
 
 
 def fit_line(x: list, y: list) -> dict:
