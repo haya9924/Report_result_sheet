@@ -2,7 +2,7 @@
 name: resultsheet
 description: >
   実験レポートの測定結果を LaTeX や文章にまとめるときに使う。resultsheet で
-  管理された実験データ(reports/<id>/ に definition.yaml と results.json がある)
+  管理された実験データ(reports フォルダ配下の definition.yaml と results.json)
   から、測定値・導出量・計算式・単位・誤差を取得して原稿に書く。数値を自分で
   計算・転記・丸めしてはならず、必ず CLI 出力の value/display を使う。実験の
   計算方式(definition.yaml)を新規作成・編集したり、結果入力後に誤差(不確かさ)
