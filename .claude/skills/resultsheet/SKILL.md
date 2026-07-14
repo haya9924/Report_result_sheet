@@ -31,7 +31,21 @@ description: >
 
 ## コマンド(CUI)
 
-作業ディレクトリは reports/ を含むリポジトリ直下。`--reports-dir` で別の場所も指定可。
+`resultsheet` はデフォルトでカレントディレクトリ直下の `./reports/` を見る
+(`resultsheet/cli.py` の `DEFAULT_REPORTS_DIR`)。そのため **`reports/` フォルダが
+ある場所(通常はこのリポジトリのルート)で実行する**こと。別の場所からや
+別パスの reports/ を使う場合は `--reports-dir <path>` を毎回明示する:
+
+```bash
+resultsheet --reports-dir /path/to/reports list
+```
+
+`resultsheet list` を実行して `(レポートはまだありません)` と出るのは、
+`reports/` にまだ何も無い(ユーザーがまだブラウザで入力していない)だけで
+異常ではない。その場合は `resultsheet serve` の起動を案内し、ユーザーの
+入力を待つ。新規レポートの作成・値入力は CLI ではなく必ずブラウザ
+(`resultsheet serve` → `http://127.0.0.1:8000/`)から行う — CLI に `new` の
+ような作成コマンドは存在しない。
 
 ```bash
 resultsheet list [--json]                     # レポート一覧
