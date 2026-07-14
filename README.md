@@ -34,6 +34,11 @@ resultsheet serve            # http://127.0.0.1:8000/ をブラウザで開く
 
 ## AI 向け CLI(CUI からのデータ取得)
 
+Claude Code など AI エージェント向けに、使い方を指示するスキルファイル
+`.claude/skills/resultsheet/SKILL.md` を同梱しています(このリポジトリを開いた
+Claude Code が自動認識します)。数値を手計算・転記せず必ず CLI 出力の
+`display` / `value` を使う、といった運用規則をまとめてあります。
+
 LaTeX 執筆時、AI は数値を自分で計算・転記せず、必ず以下の出力の `display`(表示値)と `value`(フル精度値)を使ってください。
 
 ```bash
