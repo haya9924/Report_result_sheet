@@ -71,6 +71,48 @@ class TestFit:
         assert call("slope", [1.0, None], [1.0, 2.0]) is None
 
 
+class TestUncertainty:
+    # y = 2x + 1 に近いがぴったりではないデータ(残差あり)
+    X = [0.0, 1.0, 2.0, 3.0, 4.0]
+    Y = [1.1, 2.9, 5.2, 6.8, 9.1]
+
+    def _expected_fit_errs(self, x, y):
+        x = np.asarray(x, float); y = np.asarray(y, float)
+        n = len(x)
+        a, b = np.polyfit(x, y, 1)
+        resid = y - (a * x + b)
+        s_sq = (resid**2).sum() / (n - 2)
+        sxx = ((x - x.mean())**2).sum()
+        se_a = np.sqrt(s_sq / sxx)
+        se_b = np.sqrt(s_sq * (1 / n + x.mean()**2 / sxx))
+        return float(se_a), float(se_b)
+
+    def test_slope_err_matches_formula(self):
+        se_a, se_b = self._expected_fit_errs(self.X, self.Y)
+        assert call("slope_err", self.X, self.Y) == pytest.approx(se_a)
+        assert call("intercept_err", self.X, self.Y) == pytest.approx(se_b)
+
+    def test_perfect_fit_has_zero_error(self):
+        x = [0.0, 1.0, 2.0, 3.0]
+        y = [1.0, 3.0, 5.0, 7.0]  # y=2x+1 ぴったり
+        assert call("slope_err", x, y) == pytest.approx(0.0, abs=1e-12)
+        assert call("intercept_err", x, y) == pytest.approx(0.0, abs=1e-12)
+
+    def test_needs_three_points(self):
+        with pytest.raises(EvalError, match="3 点以上"):
+            call("slope_err", [1.0, 2.0], [1.0, 2.0])
+
+    def test_none_propagates(self):
+        assert call("slope_err", [1.0, 2.0, None], [1.0, 2.0, 3.0]) is None
+
+    def test_sem(self):
+        data = [1.0, 2.0, 3.0, 4.0]
+        assert call("sem", data) == pytest.approx(np.std(data, ddof=1) / np.sqrt(4))
+
+    def test_sem_none(self):
+        assert call("sem", [1.0, None]) is None
+
+
 class TestScalar:
     def test_sqrt(self):
         assert call("sqrt", 16.0) == 4.0

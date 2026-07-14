@@ -99,11 +99,23 @@ class ReportStore:
         return self.load(report_id)
 
     def update_definition(self, report_id: str, yaml_text: str) -> Report:
+        """定義(計算方式)を差し替える。既存の入力値(results.json)は保持する。
+
+        結果が保存済みなら、新しい定義で既存入力を再計算して results.json も
+        更新する。これにより「結果入力後に誤差の導出量を YAML へ追加する」と、
+        既存データに対する誤差が即座に反映され、verify も整合したままになる。
+        """
         d = self._report_dir(report_id)
         if not (d / "definition.yaml").is_file():
             raise StoreError(f"レポート {report_id!r} は存在しません")
         load_definition(yaml_text)  # 保存前に検証
         (d / "definition.yaml").write_text(yaml_text, encoding="utf-8")
+        # 入力値を保ったまま、新しい定義で computed を再計算して保存し直す
+        existing = self.load(report_id).results
+        if existing is not None:
+            self.save_results(
+                report_id, existing.get("inputs", {}), existing.get("tables", {})
+            )
         return self.load(report_id)
 
     def delete(self, report_id: str) -> None:

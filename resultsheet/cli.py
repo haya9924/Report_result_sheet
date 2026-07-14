@@ -79,6 +79,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("report")
     p.set_defaults(func=cmd_verify)
 
+    p = sub.add_parser(
+        "get-definition", help="レポートの定義(計算方式)YAMLを出力(AIが読み取り用)"
+    )
+    p.add_argument("report")
+    p.set_defaults(func=cmd_get_definition)
+
+    p = sub.add_parser(
+        "set-definition",
+        help="定義YAMLを差し替える。既存の入力値は保持したまま再計算する"
+        "(AIが誤差の導出量などを後から追加する用)",
+    )
+    p.add_argument("report")
+    p.add_argument(
+        "path", nargs="?", default="-",
+        help="新しい定義YAMLのパス(省略 または - で標準入力から読む)",
+    )
+    p.set_defaults(func=cmd_set_definition)
+
     return parser
 
 
@@ -316,6 +334,54 @@ def cmd_verify(args) -> int:
             print(f"- {msg}", file=sys.stderr)
         return 1
     print("OK: 保存済み結果は現在の定義での再計算と一致しています")
+    return 0
+
+
+def cmd_get_definition(args) -> int:
+    text = _store(args).definition_text(args.report)
+    sys.stdout.write(text if text.endswith("\n") else text + "\n")
+    return 0
+
+
+def cmd_set_definition(args) -> int:
+    """定義YAMLを差し替える。既存の入力値は保持したまま新しい定義で再計算する。
+
+    AI が「結果入力後に誤差の導出量などを追加する」ための書き込み系コマンド。
+    典型的な流れ:
+        resultsheet get-definition <report> > def.yaml   # 現在の定義を取得
+        # def.yaml に derived(例: slope_err による g の誤差)を追記
+        resultsheet set-definition <report> def.yaml      # 差し替え+再計算
+        resultsheet get <report> <new_var>                # 追加した誤差量を参照
+    """
+    if args.path == "-":
+        yaml_text = sys.stdin.read()
+    else:
+        path = Path(args.path)
+        if not path.is_file():
+            print(f"エラー: {path} が見つかりません", file=sys.stderr)
+            return 1
+        yaml_text = path.read_text(encoding="utf-8")
+
+    store = _store(args)
+    try:
+        report = store.update_definition(args.report, yaml_text)
+    except ResultSheetError as e:
+        # update_definition は書き込み前に検証するので、失敗時も元の定義は無傷
+        print(f"NG: 定義を更新できません(元の定義は保持されました): {e}", file=sys.stderr)
+        return 1
+
+    had_results = report.results is not None
+    d = report.definition
+    print(f"OK: {d.id} の定義を更新しました(導出量 {len(d.derived)} 個)")
+    if had_results:
+        print("既存の入力値を保持したまま、新しい定義で再計算しました。")
+        # 追加/更新された導出量の値を、AI がすぐ参照できるよう表示
+        computed = report.results.get("computed", {})
+        for name, e in computed.items():
+            print(f"  {name} = {e.get('display')} "
+                  f"(= {_md_num(e.get('value'))}) {e.get('unit') or ''}")
+    else:
+        print("(まだ結果が未入力です。GUI で値を入力すると新しい定義で計算されます)")
     return 0
 
 

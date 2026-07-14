@@ -43,7 +43,31 @@ resultsheet show <report> --format md    # 人間/執筆用の表形式
 resultsheet get  <report> <var>          # 1変数の value / display / unit / expr
 resultsheet verify <report>              # 保存値と再計算の一致検証(exit 0/1)
 resultsheet validate <path.yaml>         # 定義YAMLの静的検証(exit 0/1)
+
+resultsheet get-definition <report>      # 定義(計算方式)YAML を出力
+resultsheet set-definition <report> <path|->  # 定義を差し替え、既存入力で再計算
 ```
+
+### 結果入力後に誤差(不確かさ)を後から算出する
+
+計算方式(`definition.yaml`)と実験結果(`results.json`)は別ファイルで、**結果入力後でも定義に導出量を追加すれば、既存の測定データに対してその場で再計算されます**。誤差評価を後付けする典型的な用途に対応しています。
+
+AI は CUI だけでこれを行えます:
+
+```bash
+resultsheet get-definition <report> > def.yaml   # 現在の計算方式を取得
+# def.yaml の derived: に誤差の導出量を追記。例(自由落下の g):
+#   - name: g_error
+#     expr: "2 * slope_err(drops.t2, drops.h)"   # フィット傾きの標準誤差 → g へ伝播
+#     unit: m/s^2
+#     display: {sigfigs: 2}
+resultsheet set-definition <report> def.yaml     # 差し替え+既存データで再計算
+resultsheet get <report> g_error                 # 後付けした誤差を参照
+```
+
+`set-definition` は既存の入力値を保持したまま新しい定義で計算し直して保存するため、`verify` も整合したままです(検証エラーがあれば書き込まず、元の定義を保持)。標準入力からも読めます(`set-definition <report> -`)。GUI では「定義を編集」画面で同じことができます。
+
+同梱テンプレート `free_fall_error` は、フィット傾きの標準誤差から g の誤差を伝播させる完全な例です。
 
 `show --format json` の各導出量は次の形です(フル精度値と表示値を必ず併記):
 
@@ -109,8 +133,11 @@ derived:                   # スカラー導出量。table.col で列全体を�
 |---|---|
 | 要素ごと | `sqrt abs exp log log10 sin cos tan atan floor ceil round2(x,n)` |
 | 集計 | `mean std`(標本, ddof=1)`pstd`(母, ddof=0)`sum min max count` |
+| 誤差(不確かさ) | `sem(x)`(平均値の標準誤差)`slope_err(x,y) intercept_err(x,y)`(フィット係数の標準誤差) |
 | 最小二乗フィット | `slope(x,y) intercept(x,y) rvalue(x,y)`(y = a·x + b) |
 | 定数 | `pi e` |
+
+誤差伝播(例: ρ = m/V なら δρ = ρ·√((δm/m)² + (δV/V)²))は、不確かさを `inputs` に加えて `sqrt`・`**` 等で式に書けます。フィットの傾き・切片の標準誤差は `slope_err` / `intercept_err`(残差分散を用いた標準的な推定、`scipy.stats.linregress` の stderr と一致)で得られます。
 
 - 演算子: `+ - * / ** % //`
 - **未入力(空欄)を含む列の集計・フィットは結果が「未確定(—)」になります**(未入力を黙って除外して平均する事故を防ぐため)

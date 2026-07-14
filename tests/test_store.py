@@ -94,10 +94,30 @@ class TestResults:
         problems = density_store.verify("my_density")
         assert any("一致しません" in p for p in problems)
 
-    def test_verify_detects_definition_change(self, density_store):
+    def test_update_definition_keeps_verify_consistent(self, density_store):
+        # update_definition 経由なら再計算+保存し直すので verify は通ったまま
         density_store.save_results("my_density", {"m": 12.345, "V": 4.567}, {})
         text = density_store.definition_text("my_density") + "\n# 変更\n"
         density_store.update_definition("my_density", text)
+        assert density_store.verify("my_density") == []
+
+    def test_update_definition_preserves_inputs_and_recomputes(self, density_store):
+        # 結果入力後に導出量を追加 → 既存入力に対して計算され、保存される
+        density_store.save_results("my_density", {"m": 12.345, "V": 4.567}, {})
+        text = density_store.definition_text("my_density") + (
+            "  - name: rho_dev\n    expr: \"abs(rho - 7.874)\"\n    unit: g/cm^3\n"
+        )
+        report = density_store.update_definition("my_density", text)
+        assert report.results["inputs"]["m"] == 12.345  # 入力は保持
+        assert report.results["computed"]["rho_dev"]["value"] == abs(
+            (12.345 / 4.567) - 7.874
+        )
+
+    def test_verify_detects_manual_disk_edit(self, density_store):
+        # definition.yaml をディスク上で直接書き換えた場合は verify が検出する
+        density_store.save_results("my_density", {"m": 12.345, "V": 4.567}, {})
+        path = density_store.reports_dir / "my_density" / "definition.yaml"
+        path.write_text(path.read_text(encoding="utf-8") + "\n# 手動変更\n", encoding="utf-8")
         problems = density_store.verify("my_density")
         assert any("変更されています" in p for p in problems)
 

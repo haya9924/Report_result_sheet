@@ -1,0 +1,49 @@
+# テンプレート: 自由落下による重力加速度の測定(誤差つき)
+# free_fall に誤差(不確かさ)の導出量を加えた例。
+# フィット傾きの標準誤差 slope_err から g の誤差を伝播させる。
+meta:
+  id: free_fall_error
+  title: 自由落下による重力加速度の測定(誤差評価つき)
+  description: >
+    落下距離 h と落下時間 t を繰り返し測定し、h = (g/2) t^2 の直線フィットから
+    g とその標準誤差を求める。誤差は最小二乗フィットの傾きの標準誤差から伝播させる。
+
+tables:
+  - name: drops
+    label: 落下測定
+    min_rows: 5
+    columns:
+      - {name: h, label: 落下距離, unit: m}
+      - {name: t, label: 落下時間, unit: s}
+    derived_columns:
+      - {name: t2, label: 時間の二乗, expr: "t ** 2", unit: s^2, display: {sigfigs: 4}}
+
+derived:
+  # --- フィット(値) ---
+  - name: a_slope
+    label: フィット直線の傾き (h = a·t² + b)
+    expr: "slope(drops.t2, drops.h)"
+    unit: m/s^2
+    display: {sigfigs: 4}
+  # --- フィット(標準誤差) ---
+  - name: a_slope_err
+    label: 傾きの標準誤差
+    expr: "slope_err(drops.t2, drops.h)"
+    unit: m/s^2
+    display: {sigfigs: 2}
+  # --- g とその誤差(g = 2a なので誤差も 2 倍で伝播) ---
+  - name: g_measured
+    label: 重力加速度の測定値 (g = 2a)
+    expr: "2 * a_slope"
+    unit: m/s^2
+    display: {sigfigs: 4}
+  - name: g_error
+    label: g の標準誤差 (δg = 2·δa)
+    expr: "2 * a_slope_err"
+    unit: m/s^2
+    display: {sigfigs: 2}
+  - name: g_rel_error_percent
+    label: g の相対誤差
+    expr: "g_error / g_measured * 100"
+    unit: "%"
+    display: {decimals: 2}

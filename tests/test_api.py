@@ -70,6 +70,24 @@ class TestReportManagement:
         ng = client.post("/api/validate", json={"yaml": "meta: {id: x}"}).json()
         assert ng["ok"] is False and "title" in ng["error"]
 
+    def test_edit_definition_recomputes_over_existing_results(self, with_density):
+        # 結果を入力・保存
+        with_density.put(
+            "/api/reports/dens/results",
+            json={"inputs": {"m": 12.345, "V": 4.567}, "tables": {}},
+        )
+        # 定義エディタ相当: 誤差の導出量を追記して保存
+        text = with_density.get("/api/reports/dens/definition").text
+        new_text = text + (
+            "  - name: rho_dev\n    expr: \"abs(rho - 7.874)\"\n    unit: g/cm^3\n"
+        )
+        r = with_density.put("/api/reports/dens/definition", json={"yaml": new_text})
+        assert r.status_code == 200
+        # 既存の入力に対して新しい導出量が計算され、保存済み結果に反映される
+        saved = with_density.get("/api/reports/dens/results").json()
+        assert saved["inputs"]["m"] == 12.345
+        assert saved["computed"]["rho_dev"]["value"] == abs((12.345 / 4.567) - 7.874)
+
 
 class TestComputeAndResults:
     def test_live_compute_not_saved(self, with_density):
