@@ -161,6 +161,86 @@ def _round2(x, n):
     return float(round(float(x), int(n)))
 
 
+def _interp_crossing(coord, other, target, going, name):
+    """coord が target を going 方向(±1)に横切る最初の区間で other を線形内挿する。
+
+    coord/other は同長ベクトル(測定順)。None を含む・空なら None(未確定)。
+    going >= 0 なら coord 増加方向、going < 0 なら減少方向の通過のみ対象。
+    区間パラメータ t を (0, 1] で判定し、始点ちょうど(t=0)は対象外にすることで
+    原点(0,0)などの始点重複を自然に除外する(ヒステリシスループの各枝で
+    交点が一意に定まる)。交点が無ければ None。
+    """
+    cc = _require_vector(coord, name)
+    oo = _require_vector(other, name)
+    if cc is None or oo is None:
+        return None
+    if len(cc) != len(oo):
+        raise EvalError(f"{name}(): 2 列の要素数が一致しません ({len(cc)} vs {len(oo)})")
+    g = 1.0 if going >= 0 else -1.0
+    for i in range(len(cc) - 1):
+        c0, c1 = float(cc[i]), float(cc[i + 1])
+        if c1 == c0:
+            continue
+        direction = 1.0 if c1 > c0 else -1.0
+        if direction != g:
+            continue
+        t = (target - c0) / (c1 - c0)
+        if 0.0 < t <= 1.0:
+            return float(oo[i] + t * (oo[i + 1] - oo[i]))
+    return None
+
+
+def _interp_x(x, y, y0, going):
+    """y が y0 を going 方向に横切る点の x を内挿(例: B=0 の H → 保磁力)。"""
+    return _interp_crossing(y, x, y0, going, "interp_x")
+
+
+def _interp_y(x, y, x0, going):
+    """x が x0 を going 方向に横切る点の y を内挿(例: I=0 の B → 残留磁束密度)。"""
+    return _interp_crossing(x, y, x0, going, "interp_y")
+
+
+def _head_slope(x, y, n):
+    """先頭 n 点の最小二乗直線の傾き(初期磁化曲線の初期勾配など)。"""
+    xv = _require_vector(x, "head_slope")
+    yv = _require_vector(y, "head_slope")
+    if xv is None or yv is None:
+        return None
+    n = int(n)
+    if n < 2:
+        raise EvalError("head_slope(): n は 2 以上が必要です")
+    if len(xv) < n or len(yv) < n:
+        return None
+    xs, ys = xv[:n], yv[:n]
+    xm = xs.mean()
+    sxx = float(((xs - xm) ** 2).sum())
+    if sxx == 0.0:
+        raise EvalError("head_slope(): 先頭 n 点の x が同一値でフィットできません")
+    return float(((xs - xm) * (ys - ys.mean())).sum()) / sxx
+
+
+def _head_max_ratio(x, y, n):
+    """先頭 n 点における y/x の最大値(x=0 は除外。最大割線 B/H = μm など)。"""
+    xv = _require_vector(x, "head_max_ratio")
+    yv = _require_vector(y, "head_max_ratio")
+    if xv is None or yv is None:
+        return None
+    n = int(n)
+    if n < 1:
+        raise EvalError("head_max_ratio(): n は 1 以上が必要です")
+    if len(xv) < n or len(yv) < n:
+        return None
+    best = None
+    for i in range(n):
+        xi = float(xv[i])
+        if xi == 0.0:
+            continue
+        r = float(yv[i]) / xi
+        if best is None or r > best:
+            best = r
+    return None if best is None else float(best)
+
+
 FUNCTIONS: dict[str, FuncSpec] = {
     # 要素ごと / スカラー
     "sqrt": FuncSpec(_scalar(math.sqrt, "sqrt"), 1, "平方根"),
@@ -190,6 +270,11 @@ FUNCTIONS: dict[str, FuncSpec] = {
     "rvalue": FuncSpec(_rvalue, 2, "相関係数 rvalue(x, y)"),
     "slope_err": FuncSpec(_slope_err, 2, "フィット傾きの標準誤差 slope_err(x, y)"),
     "intercept_err": FuncSpec(_intercept_err, 2, "フィット切片の標準誤差 intercept_err(x, y)"),
+    # 内挿・区間演算(ヒステリシスループからの読み取りを数式化)
+    "interp_x": FuncSpec(_interp_x, 4, "y が y0 を going(±1)方向に横切る点の x を内挿 interp_x(x, y, y0, going)"),
+    "interp_y": FuncSpec(_interp_y, 4, "x が x0 を going(±1)方向に横切る点の y を内挿 interp_y(x, y, x0, going)"),
+    "head_slope": FuncSpec(_head_slope, 3, "先頭 n 点の最小二乗傾き head_slope(x, y, n)"),
+    "head_max_ratio": FuncSpec(_head_max_ratio, 3, "先頭 n 点の y/x の最大値 head_max_ratio(x, y, n)"),
 }
 
 CONSTANTS: dict[str, float] = {

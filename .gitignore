@@ -7,3 +7,17 @@ dist/
 .venv/
 venv/
 node_modules/
+
+# ユーザーのレポートデータ（個人の測定値・結果は公開しない）
+/reports/*
+!/reports/.gitkeep
+
+# 実験結果ファイル（測定値・個人データ）
+results.json
+*.results.json
+
+# エディタ・OS の一時ファイル
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

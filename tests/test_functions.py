@@ -126,3 +126,54 @@ class TestScalar:
 
     def test_round2(self):
         assert call("round2", 1.2345, 2) == 1.23
+
+
+class TestInterpAndSegment:
+    # 単純な三角ループ: I が 0→2→-2→2 と動き、B もそれに追随する小ループ
+    I = [0.0, 1.0, 2.0, 1.0, 0.0, -1.0, -2.0, -1.0, 0.0, 1.0, 2.0]
+    B = [0.0, 0.5, 1.0, 0.8, 0.6, 0.2, -1.0, -0.8, -0.6, -0.2, 1.0]
+
+    def test_interp_y_residual_descending(self):
+        # 下降枝(I 減少方向)で I=0 のときの B → 0.6(始点の原点は除外される)
+        assert call("interp_y", self.I, self.B, 0.0, -1) == pytest.approx(0.6)
+
+    def test_interp_y_residual_ascending(self):
+        # 上昇枝(I 増加方向)で I=0 のときの B → -0.6
+        assert call("interp_y", self.I, self.B, 0.0, 1) == pytest.approx(-0.6)
+
+    def test_interp_y_excludes_origin(self):
+        # 原点(始点 t=0)を拾って 0.0 を返さないこと
+        assert call("interp_y", self.I, self.B, 0.0, 1) != 0.0
+
+    def test_interp_x_coercive_descending(self):
+        # 下降枝(B 減少方向)で B=0 になる I を内挿。B:0.2(I=-1)→-1.0(I=-2)
+        # t = (0-0.2)/(-1.0-0.2)=0.1667 → I = -1 + 0.1667*(-1) = -1.1667
+        assert call("interp_x", self.I, self.B, 0.0, -1) == pytest.approx(-1.16667, rel=1e-4)
+
+    def test_interp_x_coercive_ascending(self):
+        # 上昇枝(B 増加方向)で B=0 になる I。B:-0.2(I=1)→1.0(I=2) t=0.1667 → I=1.1667
+        assert call("interp_x", self.I, self.B, 0.0, 1) == pytest.approx(1.16667, rel=1e-4)
+
+    def test_interp_no_crossing(self):
+        assert call("interp_x", [0.0, 1.0, 2.0], [1.0, 2.0, 3.0], 0.0, 1) is None
+
+    def test_interp_none_propagates(self):
+        assert call("interp_y", [0.0, None, 2.0], [0.0, 1.0, 2.0], 1.0, 1) is None
+
+    def test_head_slope(self):
+        x = [0.0, 1.0, 2.0, 10.0]
+        y = [0.0, 2.0, 4.0, 999.0]  # 先頭3点は傾き2、4点目は無視される
+        assert call("head_slope", x, y, 3) == pytest.approx(2.0)
+
+    def test_head_slope_needs_enough_points(self):
+        assert call("head_slope", [0.0, 1.0], [0.0, 1.0], 3) is None
+
+    def test_head_max_ratio(self):
+        x = [1.0, 2.0, 4.0, 100.0]
+        y = [3.0, 2.0, 1.0, 999.0]  # 先頭3点の y/x: 3, 1, 0.25 → 最大3
+        assert call("head_max_ratio", x, y, 3) == pytest.approx(3.0)
+
+    def test_head_max_ratio_skips_zero_x(self):
+        x = [0.0, 2.0]
+        y = [5.0, 4.0]  # x=0 は除外、残り 4/2=2
+        assert call("head_max_ratio", x, y, 2) == pytest.approx(2.0)
