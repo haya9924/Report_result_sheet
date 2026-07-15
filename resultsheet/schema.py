@@ -399,7 +399,10 @@ def _validate_expressions(d: Definition) -> None:
         for c in list(t.columns) + list(t.derived_columns)
     }
 
-    # 表の行内導出列: 同じ表の列(裸名)+ スカラー(constants / inputs)を参照可
+    # 表の行内導出列: 同じ表の列(裸名)+ スカラー(constants / inputs / derived)を参照可。
+    # スカラー導出量(例: HI_factor)は導出列より先に評価されるため参照できる。
+    derived_scalar_names = {dv.name for dv in d.derived}
+    dcol_scalar_names = scalar_names | derived_scalar_names
     for t in d.tables:
         row_names = {c.name for c in t.columns}
         exprs = {dc.name: dc.expr for dc in t.derived_columns}
@@ -411,12 +414,12 @@ def _validate_expressions(d: Definition) -> None:
                         f"「{ref}」のようなテーブル参照は使えません。"
                         "同じ表の列は列名だけで参照してください"
                     )
-                if ref not in row_names and ref not in exprs and ref not in scalar_names:
+                if ref not in row_names and ref not in exprs and ref not in dcol_scalar_names:
                     raise DefinitionError(
                         f"テーブル {t.name} の導出列 {dc.name}: {ref!r} は"
-                        "定義されていません(参照できるのは同じ表の列・constants・inputs)"
+                        "定義されていません(参照できるのは同じ表の列・constants・inputs・derived)"
                     )
-        topological_order(exprs, row_names | scalar_names)  # 循環検出
+        topological_order(exprs, row_names | dcol_scalar_names)  # 循環検出
 
     # スカラー導出量: constants / inputs / 他の derived / table.col を参照可
     derived_exprs = {dv.name: dv.expr for dv in d.derived}

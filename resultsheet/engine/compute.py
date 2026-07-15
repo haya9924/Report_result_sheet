@@ -3,9 +3,11 @@
 compute_all() が CLI / API / 保存処理から呼ばれる唯一の計算入口。
 評価順序:
   1. namespace ← constants + inputs
-  2. 各テーブル: 入力列をベクトル化 → derived_columns を行ごとにトポ順評価
-  3. namespace に table.col ベクトル(入力列 + 導出列)を登録
-  4. derived をトポ順に評価し、逐次 namespace へ
+  2. 入力テーブル列をベクトル化し namespace(table.col)へ登録
+  3. スカラー導出量のうち「導出列に依存しない(pre)」ものを先に評価
+     → これにより derived_columns が H=HI_factor*I のようにスカラー導出量を参照できる
+  4. 各テーブル: derived_columns を行ごとにトポ順評価(pre スカラーを参照可)
+  5. スカラー導出量のうち「導出列に依存する(post)」ものを評価
 値はすべてフル精度 float(未確定は None)。display は表示専用の文字列。
 """
 
@@ -16,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from resultsheet.engine import rounding
 from resultsheet.engine.graph import topological_order
-from resultsheet.engine.safe_eval import evaluate
+from resultsheet.engine.safe_eval import evaluate, extract_references
 from resultsheet.errors import EvalError
 
 if TYPE_CHECKING:
@@ -62,8 +64,67 @@ def compute_all(definition: Definition, inputs: dict, tables: dict) -> ComputeRe
         if msg:
             result.range_warnings["inputs"][i.name] = msg
 
+    # --- 入力テーブル列をベクトル化し、先に namespace(table.col)へ登録 ---
+    table_input_vectors: dict[str, dict[str, list]] = {}
     for t in definition.tables:
         col_vectors = _table_vectors(t, tables.get(t.name))
+        table_input_vectors[t.name] = col_vectors
+        for col, vec in col_vectors.items():
+            ns[f"{t.name}.{col}"] = vec
+
+    # --- スカラー導出量を pre(導出列に非依存)/ post(導出列に依存)に分割 ---
+    derived_by_name = {dv.name: dv for dv in definition.derived}
+    derived_col_fullnames = {
+        f"{t.name}.{dc.name}"
+        for t in definition.tables for dc in t.derived_columns
+    }
+    scalar_refs = {dv.name: extract_references(dv.expr) for dv in definition.derived}
+    post: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for name, refs in scalar_refs.items():
+            if name in post:
+                continue
+            if (refs & derived_col_fullnames) or (refs & post):
+                post.add(name)
+                changed = True
+    pre_exprs = {n: dv.expr for n, dv in derived_by_name.items() if n not in post}
+    post_exprs = {n: dv.expr for n, dv in derived_by_name.items() if n in post}
+
+    def _eval_scalars(exprs: dict) -> None:
+        for name in topological_order(exprs, set(ns)):
+            dv = derived_by_name[name]
+            error: str | None = None
+            try:
+                value = evaluate(dv.expr, ns)
+            except EvalError as e:
+                value, error = None, str(e)
+            ns[name] = value
+            entry = {
+                "value": value,
+                "display": rounding.format_display(value, dv.display),
+                "unit": dv.unit,
+                "expr": dv.expr,
+                "label": dv.label,
+                "rounding": dv.display or {"sigfigs": rounding.DEFAULT_SIGFIGS},
+            }
+            if error is not None:
+                entry["error"] = error
+                result.errors[name] = error
+            else:
+                msg = range_warning(value, dv.range, dv.label or dv.name, dv.unit)
+                if msg:
+                    entry["range_warning"] = msg
+                    result.range_warnings["derived"][name] = msg
+            result.computed[name] = entry
+
+    # 1) 導出列に依存しないスカラー導出量を先に評価(HI_factor など)
+    _eval_scalars(pre_exprs)
+
+    # 2) 各テーブルの derived_columns を評価(pre スカラーを参照可能)
+    for t in definition.tables:
+        col_vectors = table_input_vectors[t.name]
         n_rows = len(next(iter(col_vectors.values()))) if col_vectors else 0
 
         dcol_exprs = {dc.name: dc.expr for dc in t.derived_columns}
@@ -109,38 +170,11 @@ def compute_all(definition: Definition, inputs: dict, tables: dict) -> ComputeRe
                 _check_column(result, "derived_columns", t.name, name,
                               dc.label or name, dc.unit, vec, dc.range)
 
-        for col, vec in col_vectors.items():
-            ns[f"{t.name}.{col}"] = vec
         for name, vec in derived_vectors.items():
             ns[f"{t.name}.{name}"] = vec
 
-    derived_exprs = {dv.name: dv.expr for dv in definition.derived}
-    derived_by_name = {dv.name: dv for dv in definition.derived}
-    for name in topological_order(derived_exprs, set(ns)):
-        dv = derived_by_name[name]
-        error: str | None = None
-        try:
-            value = evaluate(dv.expr, ns)
-        except EvalError as e:
-            value, error = None, str(e)
-        ns[name] = value
-        entry = {
-            "value": value,
-            "display": rounding.format_display(value, dv.display),
-            "unit": dv.unit,
-            "expr": dv.expr,
-            "label": dv.label,
-            "rounding": dv.display or {"sigfigs": rounding.DEFAULT_SIGFIGS},
-        }
-        if error is not None:
-            entry["error"] = error
-            result.errors[name] = error
-        else:
-            msg = range_warning(value, dv.range, dv.label or dv.name, dv.unit)
-            if msg:
-                entry["range_warning"] = msg
-                result.range_warnings["derived"][name] = msg
-        result.computed[name] = entry
+    # 3) 導出列に依存するスカラー導出量を評価(slope(drops.t2, ...) など)
+    _eval_scalars(post_exprs)
 
     return result
 
